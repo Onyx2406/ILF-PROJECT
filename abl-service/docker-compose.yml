@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database for ABL service
+  abl-postgres:
+    image: postgres:15
+    container_name: abl-postgres
+    environment:
+      POSTGRES_DB: abl_cbs
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - abl_postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - abl-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d abl_cbs"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ABL Backend Service
+  abl-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: abl-backend
+    environment:
+      - PGHOST=abl-postgres
+      - PGPORT=5432
+      - PGDATABASE=abl_cbs
+      - PGUSER=postgres
+      - PGPASSWORD=postgres
+      - NODE_ENV=development
+    ports:
+      - "8101:8101"
+    volumes:
+      - ./server.js:/app/server.js
+      - ./package.json:/app/package.json
+      - ./node_modules:/app/node_modules
+    depends_on:
+      abl-postgres:
+        condition: service_healthy
+    networks:
+      - abl-network
+    command: ["npm", "run", "dev:backend"]
+    restart: unless-stopped
+
+  # ABL Frontend (Next.js)
+  abl-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: abl-frontend
+    environment:
+      - BACKEND_URL=http://abl-backend:8101
+      # Happy Life Bank Configuration
+      - HLB_GRAPHQL_ENDPOINT=http://localhost:4001/graphql
+      - HLB_SIGNATURE_SECRET=iyIgCprjb9uL8wFckR+pLEkJWMB7FJhgkvqhTQR/964=
+      - HLB_SIGNATURE_VERSION=1
+      - HLB_TENANT_ID=cf5fd7d3-1eb1-4041-8e43-ba45747e9e5d
+    ports:
+      - "3200:3000"
+    volumes:
+      - ./app:/app/app
+      - ./components:/app/components
+      - ./public:/app/public
+      - ./package.json:/app/package.json
+      - ./next.config.ts:/app/next.config.ts
+      - ./tsconfig.json:/app/tsconfig.json
+      - ./tailwind.config.ts:/app/tailwind.config.ts
+      - ./node_modules:/app/node_modules
+    depends_on:
+      - abl-backend
+    networks:
+      - abl-network
+    command: ["npm", "run", "dev"]
+    restart: unless-stopped
+
+volumes:
+  abl_postgres_data:
+    driver: local
+
+networks:
+  abl-network:
+    driver: bridge
