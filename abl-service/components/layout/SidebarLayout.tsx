@@ -16,22 +16,22 @@ const navigation = [
     description: 'Overview and workflow guide'
   },
   {
-    name: 'Create Account',
-    href: '/create-account',
-    icon: '🏦',
-    description: 'Step 1: New ABL account'
-  },
-  {
-    name: 'All Accounts',
-    href: '/accounts-view',
+    name: 'Customer Management',
+    href: '/customers',
     icon: '👥',
-    description: 'Step 2: Browse accounts'
+    description: 'Browse Customers'
   },
   {
-    name: 'Payment Pointers',
+    name: 'Account Management',
+    href: '/accounts-list',
+    icon: '🏦',
+    description: 'Browse accounts'
+  },
+  {
+    name: 'Wallet Address',
     href: '/payment-pointers',
     icon: '💳',
-    description: 'ILP payment management'
+    description: 'ILP Address management'
   },
   
 ];
@@ -56,7 +56,7 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
           <div className="flex h-16 items-center justify-between px-4 border-b border-gray-200">
             <div className="flex items-center">
               <span className="text-2xl">🏦</span>
-              <span className="ml-2 text-lg font-semibold text-gray-900">ABL Manager</span>
+              <span className="ml-2 text-lg font-semibold text-gray-900">ABL Core Banking System</span>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
@@ -81,7 +81,7 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
             {!sidebarCollapsed && (
               <div className="flex items-center">
                 <span className="text-2xl">🏦</span>
-                <span className="ml-2 text-lg font-semibold text-gray-900">ABL Manager</span>
+                <span className="ml-2 text-lg font-semibold text-gray-900">ABL Core Banking System</span>
               </div>
             )}
             {sidebarCollapsed && (
@@ -185,32 +185,6 @@ function SidebarContent({ pathname, collapsed }: { pathname: string; collapsed: 
         })}
       </nav>
 
-      {/* Workflow Steps */}
-      {!collapsed && (
-        <div className="px-4 py-4 border-t border-gray-200">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-            Workflow Steps
-          </h3>
-          <div className="space-y-2">
-            <div className="flex items-center text-xs">
-              <div className="w-5 h-5 bg-green-500 text-white rounded-full flex items-center justify-center mr-2 text-xs font-bold flex-shrink-0">1</div>
-              <span className="text-gray-600 truncate">Create Account</span>
-            </div>
-            <div className="flex items-center text-xs">
-              <div className="w-5 h-5 bg-blue-500 text-white rounded-full flex items-center justify-center mr-2 text-xs font-bold flex-shrink-0">2</div>
-              <span className="text-gray-600 truncate">View All Accounts</span>
-            </div>
-            <div className="flex items-center text-xs">
-              <div className="w-5 h-5 bg-purple-500 text-white rounded-full flex items-center justify-center mr-2 text-xs font-bold flex-shrink-0">3</div>
-              <span className="text-gray-600 truncate">Create Wallet</span>
-            </div>
-            <div className="flex items-center text-xs">
-              <div className="w-5 h-5 bg-orange-500 text-white rounded-full flex items-center justify-center mr-2 text-xs font-bold flex-shrink-0">4</div>
-              <span className="text-gray-600 truncate">ILP Active</span>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Collapsed Workflow Indicators */}
       {collapsed && (
@@ -257,12 +231,12 @@ function SidebarContent({ pathname, collapsed }: { pathname: string; collapsed: 
         <div className="text-center">
           {!collapsed ? (
             <>
-              <p className="text-xs text-gray-500">ABL Account Manager</p>
+              <p className="text-xs text-gray-500">ABL Core Banking System</p>
               <p className="text-xs text-gray-400">v1.0.0</p>
             </>
           ) : (
             <div className="flex justify-center">
-              <div className="w-2 h-2 bg-gray-400 rounded-full" title="ABL Account Manager v1.0.0"></div>
+              <div className="w-2 h-2 bg-gray-400 rounded-full" title=" ABL Core Banking System"></div>
             </div>
           )}
         </div>

@@ -4,10 +4,21 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import SidebarLayout from '@/components/layout/SidebarLayout';
 
+interface AccountForm {
+  name: string;
+  email: string;
+  currency: string;
+  initial_balance: string;
+  account_type: string; // Add this field
+}
+
 export default function CreateAccountPage() {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<AccountForm>({
     name: '',
-    email: ''
+    email: '',
+    currency: 'PKR',
+    initial_balance: '0.00',
+    account_type: 'SAVINGS' // Add default value
   });
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -36,7 +47,7 @@ export default function CreateAccountPage() {
         });
         
         // Reset form
-        setFormData({ name: '', email: '' });
+        setFormData({ name: '', email: '', currency: 'PKR', initial_balance: '0.00', account_type: 'SAVINGS' });
         
         // Redirect to accounts view after 2 seconds
         setTimeout(() => {
@@ -102,6 +113,26 @@ export default function CreateAccountPage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 placeholder="Enter email address"
               />
+            </div>
+
+            {/* Account Type */}
+            <div>
+              <label htmlFor="account_type" className="block text-sm font-medium text-gray-700 mb-2">
+                Account Type *
+              </label>
+              <select
+                id="account_type"
+                name="account_type"
+                value={formData.account_type}
+                onChange={(e) => setFormData({ ...formData, account_type: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                required
+              >
+                <option value="SAVINGS">Savings Account</option>
+                <option value="CHECKING">Checking Account</option>
+                <option value="BUSINESS">Business Account</option>
+                <option value="FIXED_DEPOSIT">Fixed Deposit</option>
+              </select>
             </div>
 
             {/* Submit Button */}

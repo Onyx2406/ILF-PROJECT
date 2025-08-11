@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import SidebarLayout from '@/components/layout/SidebarLayout';
 
 interface Account {
@@ -27,6 +27,7 @@ interface Asset {
 
 export default function AccountDetailsPage() {
   const params = useParams();
+  const router = useRouter();
   const accountId = params.id as string;
 
   const [account, setAccount] = useState<Account | null>(null);
@@ -253,7 +254,7 @@ export default function AccountDetailsPage() {
               <p className="text-gray-600 mt-2">View account information and create wallet address</p>
             </div>
             <a
-              href="/accounts-view"
+              href="/accounts-list"
               className="text-blue-600 hover:text-blue-800 font-medium"
             >
               ← Back to All Accounts
@@ -380,77 +381,93 @@ export default function AccountDetailsPage() {
             </div>
           </div>
 
-          {/* Create Wallet Address Card */}
+          {/* Create Wallet Address Card - Information Only */}
           <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-            <div className="bg-gradient-to-r from-purple-600 to-pink-600 text-white p-6">
-              <h2 className="text-xl font-semibold mb-2">Create Wallet Address</h2>
-              <p className="text-purple-100">Generate Rafiki payment pointer</p>
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6">
+              <h2 className="text-xl font-semibold mb-2">Wallet Address Information</h2>
+              <p className="text-blue-100">Payment pointer creation via API only</p>
             </div>
             
             <div className="p-6">
               <div className="space-y-6">
-                {/* Asset Selection */}
-                <div>
-                  <label htmlFor="asset" className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Asset
-                  </label>
-                  {assets.length === 0 ? (
-                    <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500">
-                      No assets available - Check Rafiki connection
+                {account.wallet_address_url ? (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0">
+                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-green-900 mb-2">Wallet Address Active</h4>
+                        <p className="text-sm text-green-800">This account has an active payment pointer configured.</p>
+                      </div>
                     </div>
-                  ) : (
-                    <select
-                      value={selectedAsset}
-                      onChange={(e) => setSelectedAsset(e.target.value)}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Select an asset</option>
-                      {assets.map((asset) => (
-                        <option key={asset.id} value={asset.id}>
-                          {asset.code} | ID: {asset.id.substring(0, 12)}...{asset.id.length > 12 ? asset.id.substring(-4) : ''} | Scale: {asset.scale}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-
-                {/* Debug Info */}
-                {process.env.NODE_ENV === 'development' && (
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs">
-                    <p><strong>Debug Info:</strong></p>
-                    <p>Assets loaded: {assets.length}</p>
-                    <p>Selected asset: {selectedAsset}</p>
-                    <p>Loading: {loading.toString()}</p>
+                  </div>
+                ) : (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0">
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-blue-900 mb-2">No Wallet Address</h4>
+                        <p className="text-sm text-blue-800 mb-3">This account does not have a payment pointer configured.</p>
+                        <div className="text-xs text-blue-700">
+                          <p><strong>To create a wallet address:</strong></p>
+                          <p>• Use the Rafiki Admin API</p>
+                          <p>• POST to /wallets endpoint</p>
+                          <p>• Include account IBAN: {account.iban}</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
-                {/* Create Button */}
-                <button
-                  onClick={createWalletAddress}
-                  disabled={creatingWallet || !selectedAsset || assets.length === 0}
-                  className={`w-full py-3 rounded-lg font-medium transition-colors ${
-                    creatingWallet || !selectedAsset || assets.length === 0
-                      ? 'bg-gray-400 cursor-not-allowed'
-                      : 'bg-purple-600 hover:bg-purple-700 text-white'
-                  }`}
-                >
-                  {creatingWallet ? (
-                    <div className="flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                      Creating Wallet Address...
-                    </div>
-                  ) : assets.length === 0 ? (
-                    '❌ No Assets Available'
-                  ) : (
-                    '🚀 Create Wallet Address'
-                  )}
-                </button>
+                {/* API Information */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-900 mb-3">API Integration Notes</h4>
+                  <ul className="text-sm text-gray-600 space-y-2">
+                    <li className="flex items-center space-x-2">
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
+                      <span>Wallet address creation handled via Rafiki Admin API</span>
+                    </li>
+                    <li className="flex items-center space-x-2">
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
+                      <span>Payment pointers enable ILP transactions</span>
+                    </li>
+                    <li className="flex items-center space-x-2">
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
+                      <span>Each wallet address is asset-specific</span>
+                    </li>
+                    <li className="flex items-center space-x-2">
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
+                      <span>Multiple wallets can be created per account</span>
+                    </li>
+                  </ul>
+                </div>
 
-                {/* Additional Info */}
-                <div className="text-xs text-gray-500 space-y-1">
-                  <p>• The wallet address will be stored in the ILP_active_accounts table</p>
-                  <p>• You can create multiple wallet addresses for different currencies</p>
-                  <p>• Each wallet address is unique and can be used for receiving payments</p>
+                {/* Account Actions */}
+                <div className="border-t border-gray-200 pt-6">
+                  <h4 className="font-medium text-gray-900 mb-4">Account Management</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <button
+                      onClick={() => router.push(`/edit-account/${account.id}`)}
+                      className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Edit Account
+                    </button>
+                    
+                  </div>
                 </div>
               </div>
             </div>

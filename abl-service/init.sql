@@ -46,3 +46,40 @@ ADD COLUMN IF NOT EXISTS wallet_address_id VARCHAR(255),
 ADD COLUMN IF NOT EXISTS wallet_address_url VARCHAR(255),
 ADD COLUMN IF NOT EXISTS wallet_public_name VARCHAR(255),
 ADD COLUMN IF NOT EXISTS asset_id VARCHAR(255);
+
+
+
+-- Connect to your database and run these SQL commands
+
+-- 1. Create customers table
+CREATE TABLE IF NOT EXISTS customers (
+    c_id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    phone_number VARCHAR(20),
+    address TEXT,
+    cnic VARCHAR(15) UNIQUE NOT NULL,
+    dob DATE,
+    status VARCHAR(20) DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. Create customer-account relationship table
+CREATE TABLE IF NOT EXISTS rel_customer_accounts (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER NOT NULL REFERENCES customers(c_id) ON DELETE CASCADE,
+    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    relationship_type VARCHAR(50) DEFAULT 'primary',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(customer_id, account_id)
+);
+
+-- 3. Add customer reference to accounts table (if not exists)
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS customer_id INTEGER REFERENCES customers(c_id);
+
+-- 4. Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
+CREATE INDEX IF NOT EXISTS idx_customers_cnic ON customers(cnic);
+CREATE INDEX IF NOT EXISTS idx_rel_customer_id ON rel_customer_accounts(customer_id);
+CREATE INDEX IF NOT EXISTS idx_rel_account_id ON rel_customer_accounts(account_id);

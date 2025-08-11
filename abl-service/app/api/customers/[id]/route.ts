@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://abl-backend:8101';
 
-// READ - Get single account
+// GET - Get single customer
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -10,7 +10,7 @@ export async function GET(
   try {
     const { id } = await params;
     
-    const response = await fetch(`${BACKEND_URL}/api/accounts/${id}`, {
+    const response = await fetch(`${BACKEND_URL}/api/customers/${id}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -21,15 +21,15 @@ export async function GET(
     return NextResponse.json(result, { status: response.status });
 
   } catch (error) {
-    console.error('Error fetching account:', error);
+    console.error('Error fetching customer:', error);
     return NextResponse.json(
-      { success: false, error: { message: 'Failed to fetch account' } },
+      { success: false, error: { message: 'Failed to fetch customer' } },
       { status: 500 }
     );
   }
 }
 
-// UPDATE - Full update of account
+// PUT - Update customer
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -38,7 +38,7 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
     
-    const response = await fetch(`${BACKEND_URL}/api/accounts/${id}`, {
+    const response = await fetch(`${BACKEND_URL}/api/customers/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -50,44 +50,15 @@ export async function PUT(
     return NextResponse.json(result, { status: response.status });
 
   } catch (error) {
-    console.error('Error updating account:', error);
+    console.error('Error updating customer:', error);
     return NextResponse.json(
-      { success: false, error: { message: 'Failed to update account' } },
+      { success: false, error: { message: 'Failed to update customer' } },
       { status: 500 }
     );
   }
 }
 
-// PATCH - Partial update of account
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-    const body = await request.json();
-    
-    const response = await fetch(`${BACKEND_URL}/api/accounts/${id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    const result = await response.json();
-    return NextResponse.json(result, { status: response.status });
-
-  } catch (error) {
-    console.error('Error partially updating account:', error);
-    return NextResponse.json(
-      { success: false, error: { message: 'Failed to update account' } },
-      { status: 500 }
-    );
-  }
-}
-
-// DELETE - Hard delete account (permanently remove from database)
+// DELETE - Delete customer
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -95,7 +66,7 @@ export async function DELETE(
   try {
     const { id } = await params;
     
-    const response = await fetch(`${BACKEND_URL}/api/accounts/${id}`, {
+    const response = await fetch(`${BACKEND_URL}/api/customers/${id}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -106,9 +77,9 @@ export async function DELETE(
     return NextResponse.json(result, { status: response.status });
 
   } catch (error) {
-    console.error('Error deleting account:', error);
+    console.error('Error deleting customer:', error);
     return NextResponse.json(
-      { success: false, error: { message: 'Failed to delete account' } },
+      { success: false, error: { message: 'Failed to delete customer' } },
       { status: 500 }
     );
   }
