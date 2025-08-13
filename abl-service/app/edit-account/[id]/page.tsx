@@ -77,7 +77,7 @@ export default function EditAccountPage({ params }: { params: Promise<{ id: stri
       if (result.success) {
         setMessage({ type: 'success', text: 'Account updated successfully' });
         setTimeout(() => {
-          router.push('/accounts-list');
+          router.push('/accounts-management');
         }, 2000);
       } else {
         setMessage({ type: 'error', text: result.error?.message || 'Failed to update account' });
@@ -246,7 +246,7 @@ export default function EditAccountPage({ params }: { params: Promise<{ id: stri
                 <div className="flex space-x-4 pt-6 border-t border-gray-200">
                   <button
                     type="button"
-                    onClick={() => router.push('/accounts-list')}
+                    onClick={() => router.push('/accounts-management')}
                     className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
                   >
                     <svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

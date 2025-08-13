@@ -15,7 +15,8 @@ interface AccountForm {
   name: string;
   email: string;
   currency: string;
-  initial_balance: string;
+  balance: string;
+  account_type: string;
 }
 
 export default function CreateAccountPage() {
@@ -25,11 +26,12 @@ export default function CreateAccountPage() {
   
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState<AccountForm>({
+  const [ formData, setFormData] = useState<AccountForm>({
     name: '',
     email: '',
     currency: 'PKR',
-    initial_balance: '0.00'
+    balance: '0.00',
+    account_type: 'SAVINGS'
   });
 
   useEffect(() => {
@@ -171,6 +173,23 @@ export default function CreateAccountPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Account Type
+                    </label>
+                    <select
+                      name="account_type"
+                      value={formData.account_type}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    >
+                      <option value="SAVINGS">Savings Account</option>
+                      <option value="CURRENT">Current Account</option>
+                      <option value="FIXED_DEPOSIT">Fixed Deposit</option>
+                      <option value="BUSINESS">Business Account</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       Currency
                     </label>
                     <select
@@ -191,8 +210,8 @@ export default function CreateAccountPage() {
                     </label>
                     <input
                       type="number"
-                      name="initial_balance"
-                      value={formData.initial_balance}
+                      name="balance"
+                      value={formData.balance}
                       onChange={handleChange}
                       min="0"
                       step="0.01"

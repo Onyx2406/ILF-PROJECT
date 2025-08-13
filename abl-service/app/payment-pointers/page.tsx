@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import SidebarLayout from '@/components/layout/SidebarLayout';
+import SidebarLayout from '../../components/layout/SidebarLayout';
 
 interface PaymentPointer {
   id: number;
@@ -35,7 +35,6 @@ export default function PaymentPointersPage() {
 
       if (data.success) {
         setPaymentPointers(data.data);
-        console.log(`📋 Loaded ${data.count} payment pointers`);
       } else {
         setError(data.error?.message || 'Failed to load payment pointers');
       }

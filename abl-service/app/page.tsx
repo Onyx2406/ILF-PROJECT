@@ -78,28 +78,24 @@ export default function Home() {
         {/* Stats Section */}
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            <div className="bg-white rounded-lg shadow p-6 text-center">
-              <div className="text-3xl font-bold text-green-600 mb-2">
-                {isLoading ? '...' : stats.totalAccounts}
-              </div>
-              <div className="text-gray-600">Total Accounts</div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6 text-center">
-              <div className="text-3xl font-bold text-blue-600 mb-2">
-                {isLoading ? '...' : `PKR ${stats.totalBalance.toLocaleString()}`}
-              </div>
-              <div className="text-gray-600">Total Balance</div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6 text-center">
-              <div className="text-3xl font-bold text-purple-600 mb-2">
-                {isLoading ? '...' : stats.activeWallets}
-              </div>
-              <div className="text-gray-600">Active Wallets</div>
-            </div>
           </div>
 
           {/* Main Actions */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
+            <Link href="/customers">
+              <div className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-8 text-center group cursor-pointer">
+                <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mx-auto mb-4 group-hover:bg-indigo-200 transition-colors">
+                  <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Customers</h3>
+                <p className="text-gray-600">
+                  Manage customer information, create new customers, and view customer details
+                </p>
+              </div>
+            </Link>
+
             <Link href="/create-account">
               <div className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-8 text-center group cursor-pointer">
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4 group-hover:bg-green-200 transition-colors">
@@ -114,14 +110,14 @@ export default function Home() {
               </div>
             </Link>
 
-            <Link href="/accounts-view">
+            <Link href="/accounts-management">
               <div className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-8 text-center group cursor-pointer">
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4 group-hover:bg-blue-200 transition-colors">
                   <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">View Accounts</h3>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Manage Accounts</h3>
                 <p className="text-gray-600">
                   Browse and manage all customer accounts with detailed information and balance tracking
                 </p>

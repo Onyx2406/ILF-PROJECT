@@ -23,7 +23,7 @@ const navigation = [
   },
   {
     name: 'Account Management',
-    href: '/accounts-list',
+    href: '/accounts-management',
     icon: '🏦',
     description: 'Browse accounts'
   },

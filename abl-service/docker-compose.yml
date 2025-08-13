@@ -21,52 +21,33 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
-  # ABL Backend Service
-  abl-backend:
+  # ABL Frontend (Next.js with integrated backend)
+  abl-app:
     build:
       context: .
-      dockerfile: Dockerfile.backend
-    container_name: abl-backend
+      dockerfile: Dockerfile.frontend
+    container_name: abl-app
+    network_mode: "host"  # Use host network to access localhost:4001 (Rafiki)
     environment:
-      - PGHOST=abl-postgres
-      - PGPORT=5432
+      # Database configuration
+      - PGHOST=localhost
+      - PGPORT=5434  # Use the host-mapped port for postgres
       - PGDATABASE=abl_cbs
       - PGUSER=postgres
       - PGPASSWORD=postgres
       - NODE_ENV=development
-    ports:
-      - "8101:8101"
-    volumes:
-      - ./server.js:/app/server.js
-      - ./package.json:/app/package.json
-      - ./node_modules:/app/node_modules
-    depends_on:
-      abl-postgres:
-        condition: service_healthy
-    networks:
-      - abl-network
-    command: ["npm", "run", "dev:backend"]
-    restart: unless-stopped
-
-  # ABL Frontend (Next.js)
-  abl-frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    container_name: abl-frontend
-    environment:
-      - BACKEND_URL=http://abl-backend:8101
+      - PORT=3200  # Set Next.js port via environment variable
       # Happy Life Bank Configuration
       - HLB_GRAPHQL_ENDPOINT=http://localhost:4001/graphql
       - HLB_SIGNATURE_SECRET=iyIgCprjb9uL8wFckR+pLEkJWMB7FJhgkvqhTQR/964=
       - HLB_SIGNATURE_VERSION=1
       - HLB_TENANT_ID=cf5fd7d3-1eb1-4041-8e43-ba45747e9e5d
-    ports:
-      - "3200:3000"
     volumes:
       - ./app:/app/app
       - ./components:/app/components
+      - ./lib:/app/lib
       - ./public:/app/public
       - ./package.json:/app/package.json
       - ./next.config.ts:/app/next.config.ts
@@ -74,9 +55,8 @@ services:
       - ./tailwind.config.ts:/app/tailwind.config.ts
       - ./node_modules:/app/node_modules
     depends_on:
-      - abl-backend
-    networks:
-      - abl-network
+      abl-postgres:
+        condition: service_healthy
     command: ["npm", "run", "dev"]
     restart: unless-stopped
 

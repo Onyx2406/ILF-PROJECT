@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const BACKEND_URL = process.env.BACKEND_URL || 'http://abl-backend:8101';
+import { getDatabase } from '@/lib/database';
+import { ensureDatabaseInitialized } from '@/lib/init';
 
 // READ - Get single account
 export async function GET(
@@ -8,17 +8,39 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    await ensureDatabaseInitialized();
     
-    const response = await fetch(`${BACKEND_URL}/api/accounts/${id}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    const { id } = await params;
+    const db = getDatabase();
+    
+    const result = await db.query(
+      `SELECT 
+        id,
+        name,
+        email,
+        iban,
+        currency,
+        balance,
+        account_type,
+        status,
+        wallet_address,
+        wallet_id,
+        asset_id,
+        created_at,
+        updated_at
+      FROM accounts 
+      WHERE id = $1`,
+      [id]
+    );
 
-    const result = await response.json();
-    return NextResponse.json(result, { status: response.status });
+    if (result.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, error: { message: 'Account not found' } },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true, data: result.rows[0] });
 
   } catch (error) {
     console.error('Error fetching account:', error);
@@ -35,19 +57,43 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureDatabaseInitialized();
+    
     const { id } = await params;
     const body = await request.json();
     
-    const response = await fetch(`${BACKEND_URL}/api/accounts/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
+    const db = getDatabase();
+    
+    // First, get the current account data
+    const currentResult = await db.query('SELECT * FROM accounts WHERE id = $1', [id]);
+    
+    if (currentResult.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, error: { message: 'Account not found' } },
+        { status: 404 }
+      );
+    }
+    
+    const currentAccount = currentResult.rows[0];
+    
+    // Use provided values or keep current values
+    const name = body.name ?? currentAccount.name;
+    const email = body.email ?? currentAccount.email;
+    const currency = body.currency ?? currentAccount.currency;
+    const balance = body.balance !== undefined ? body.balance : currentAccount.balance;
+    const account_type = body.account_type ?? currentAccount.account_type;
+    const status = body.status ?? currentAccount.status;
+    
+    const result = await db.query(
+      `UPDATE accounts 
+       SET name = $1, email = $2, currency = $3, balance = $4, 
+           account_type = $5, status = $6, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $7 
+       RETURNING *`,
+      [name, email, currency, balance, account_type, status, id]
+    );
 
-    const result = await response.json();
-    return NextResponse.json(result, { status: response.status });
+    return NextResponse.json({ success: true, data: result.rows[0] });
 
   } catch (error) {
     console.error('Error updating account:', error);
@@ -64,19 +110,52 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureDatabaseInitialized();
+    
     const { id } = await params;
     const body = await request.json();
+    const db = getDatabase();
     
-    const response = await fetch(`${BACKEND_URL}/api/accounts/${id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
+    // Build dynamic update query based on provided fields
+    const updateFields = [];
+    const values = [];
+    let paramIndex = 1;
+    
+    Object.entries(body).forEach(([key, value]) => {
+      if (value !== undefined && key !== 'id') {
+        updateFields.push(`${key} = $${paramIndex}`);
+        values.push(value);
+        paramIndex++;
+      }
     });
+    
+    if (updateFields.length === 0) {
+      return NextResponse.json(
+        { success: false, error: { message: 'No fields to update' } },
+        { status: 400 }
+      );
+    }
+    
+    updateFields.push('updated_at = CURRENT_TIMESTAMP');
+    values.push(id);
+    
+    const query = `
+      UPDATE accounts 
+      SET ${updateFields.join(', ')}
+      WHERE id = $${paramIndex} 
+      RETURNING *
+    `;
+    
+    const result = await db.query(query, values);
 
-    const result = await response.json();
-    return NextResponse.json(result, { status: response.status });
+    if (result.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, error: { message: 'Account not found' } },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true, data: result.rows[0] });
 
   } catch (error) {
     console.error('Error partially updating account:', error);
@@ -93,17 +172,40 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    await ensureDatabaseInitialized();
     
-    const response = await fetch(`${BACKEND_URL}/api/accounts/${id}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    const result = await response.json();
-    return NextResponse.json(result, { status: response.status });
+    const { id } = await params;
+    const db = getDatabase();
+    
+    // Start transaction
+    await db.query('BEGIN');
+    
+    try {
+      // First, delete relationships
+      await db.query('DELETE FROM customer_accounts WHERE account_id = $1', [id]);
+      
+      // Then delete the account
+      const result = await db.query('DELETE FROM accounts WHERE id = $1 RETURNING *', [id]);
+      
+      if (result.rows.length === 0) {
+        await db.query('ROLLBACK');
+        return NextResponse.json(
+          { success: false, error: { message: 'Account not found' } },
+          { status: 404 }
+        );
+      }
+      
+      await db.query('COMMIT');
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Account deleted successfully',
+        data: result.rows[0] 
+      });
+      
+    } catch (error) {
+      await db.query('ROLLBACK');
+      throw error;
+    }
 
   } catch (error) {
     console.error('Error deleting account:', error);
