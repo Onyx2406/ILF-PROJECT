@@ -12,7 +12,12 @@ CREATE TABLE accounts (
     iban VARCHAR(34) UNIQUE NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'PKR', -- Keep but hidden from UI
     balance DECIMAL(15,2) DEFAULT 0.00,
+    account_type VARCHAR(50) DEFAULT 'SAVINGS',
     status VARCHAR(20) DEFAULT 'active',
+    
+    -- Internet Banking Credentials
+    username VARCHAR(100) UNIQUE,
+    password_hash VARCHAR(255),
     
     -- Wallet/ILP fields (nullable - only populated after wallet creation)
     wallet_address_id VARCHAR(255) NULL,
@@ -27,6 +32,7 @@ CREATE TABLE accounts (
 -- Create indexes for better performance
 CREATE INDEX idx_accounts_email ON accounts(email);
 CREATE INDEX idx_accounts_iban ON accounts(iban);
+CREATE INDEX idx_accounts_username ON accounts(username);
 CREATE INDEX idx_accounts_wallet_id ON accounts(wallet_address_id);
 CREATE INDEX idx_accounts_asset_id ON accounts(asset_id);
 
@@ -66,7 +72,7 @@ CREATE TABLE IF NOT EXISTS customers (
 );
 
 -- 2. Create customer-account relationship table
-CREATE TABLE IF NOT EXISTS rel_customer_accounts (
+CREATE TABLE IF NOT EXISTS customer_accounts (
     id SERIAL PRIMARY KEY,
     customer_id INTEGER NOT NULL REFERENCES customers(c_id) ON DELETE CASCADE,
     account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
@@ -78,8 +84,26 @@ CREATE TABLE IF NOT EXISTS rel_customer_accounts (
 -- 3. Add customer reference to accounts table (if not exists)
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS customer_id INTEGER REFERENCES customers(c_id);
 
--- 4. Create indexes for better performance
+-- 4. Create transactions table
+CREATE TABLE IF NOT EXISTS transactions (
+    id SERIAL PRIMARY KEY,
+    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    transaction_type VARCHAR(20) NOT NULL, -- CREDIT, DEBIT, TRANSFER
+    amount DECIMAL(15,2) NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'PKR',
+    balance_after DECIMAL(15,2) NOT NULL,
+    description TEXT,
+    reference_number VARCHAR(100) UNIQUE NOT NULL,
+    related_account_id INTEGER REFERENCES accounts(id),
+    status VARCHAR(20) DEFAULT 'COMPLETED', -- COMPLETED, PENDING, FAILED
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 5. Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
 CREATE INDEX IF NOT EXISTS idx_customers_cnic ON customers(cnic);
-CREATE INDEX IF NOT EXISTS idx_rel_customer_id ON rel_customer_accounts(customer_id);
-CREATE INDEX IF NOT EXISTS idx_rel_account_id ON rel_customer_accounts(account_id);
+CREATE INDEX IF NOT EXISTS idx_customer_accounts_customer_id ON customer_accounts(customer_id);
+CREATE INDEX IF NOT EXISTS idx_customer_accounts_account_id ON customer_accounts(account_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_reference ON transactions(reference_number);
+CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at);

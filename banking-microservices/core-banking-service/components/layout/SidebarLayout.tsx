@@ -28,6 +28,12 @@ const navigation = [
     description: 'Browse accounts'
   },
   {
+    name: 'Transactions',
+    href: '/transactions',
+    icon: '📊',
+    description: 'All transactions'
+  },
+  {
     name: 'Wallet Address',
     href: '/payment-pointers',
     icon: '💳',

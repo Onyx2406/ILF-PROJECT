@@ -91,6 +91,9 @@ async function createTables(db: Pool): Promise<void> {
         wallet_address VARCHAR(255) NULL,
         wallet_id VARCHAR(255) NULL,
         asset_id VARCHAR(255) NULL,
+        customer_id INTEGER REFERENCES customers(c_id),
+        username VARCHAR(100) NULL,
+        password_hash VARCHAR(255) NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -135,6 +138,7 @@ async function createTables(db: Pool): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_accounts_wallet_address ON accounts(wallet_address);
       CREATE INDEX IF NOT EXISTS idx_accounts_wallet_id ON accounts(wallet_id);
       CREATE INDEX IF NOT EXISTS idx_accounts_asset_id ON accounts(asset_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_username ON accounts(username) WHERE username IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
       CREATE INDEX IF NOT EXISTS idx_customers_cnic ON customers(cnic);
       CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);

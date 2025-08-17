@@ -5,8 +5,8 @@ import { v4 as uuidv4 } from 'uuid';
 
 // Rafiki GraphQL configuration - Happy Life Bank
 export const RAFIKI_CONFIG = {
-  graphqlHost: 'http://localhost:4001',
-  graphqlUrl: 'http://localhost:4001/graphql',
+  graphqlHost: 'http://rafiki-happy-life-backend-1:3001',
+  graphqlUrl: 'http://rafiki-happy-life-backend-1:3001/graphql',
   backendApiSignatureSecret: 'iyIgCprjb9uL8wFckR+pLEkJWMB7FJhgkvqhTQR/964=',
   backendApiSignatureVersion: '1',
   senderTenantId: 'cf5fd7d3-1eb1-4041-8e43-ba45747e9e5d',
@@ -53,8 +53,8 @@ export async function createWalletAddressInRafiki(accountData: any): Promise<any
   const variables = {
     input: {
       assetId: RAFIKI_CONFIG.assetId,
+      address: `${RAFIKI_CONFIG.baseWalletUrl}/${accountData.iban}`,
       publicName: accountData.wallet_public_name || accountData.name,
-      url: `${RAFIKI_CONFIG.baseWalletUrl}/accounts/acc${accountData.id}`,
       additionalProperties: [
         {
           key: 'accountId',

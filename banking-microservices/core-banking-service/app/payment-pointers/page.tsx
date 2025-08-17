@@ -8,11 +8,13 @@ interface PaymentPointer {
   name: string;
   email: string;
   iban: string;
-  wallet_address_id: string;
-  wallet_address_url: string;
+  currency: string;
+  balance: string;
+  status: string;
+  wallet_address: string;
+  wallet_id: string;
   wallet_public_name: string;
   asset_id: string;
-  status: string;
   created_at: string;
   updated_at: string;
 }
@@ -95,7 +97,7 @@ export default function PaymentPointersPage() {
         <div className="max-w-7xl mx-auto px-4 py-8">
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Payment Pointers</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Wallet Addresses</h1>
             <p className="text-gray-600">
               All accounts with active Rafiki wallet addresses ({paymentPointers.length} total)
             </p>
@@ -119,7 +121,7 @@ export default function PaymentPointersPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Payment Pointers Found</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Wallet Addresses Found</h3>
               <p className="text-gray-600">
                 No accounts have wallet addresses created yet. Create wallet addresses from the account details page.
               </p>
@@ -142,7 +144,7 @@ export default function PaymentPointersPage() {
                             Account
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Payment Pointer
+                            Wallet Address
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Wallet Name
@@ -170,7 +172,7 @@ export default function PaymentPointersPage() {
                             </td>
                             <td className="px-6 py-4">
                               <div className="text-sm text-gray-900 font-mono">
-                                {pointer.wallet_address_url}
+                                {pointer.wallet_address}
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
@@ -180,7 +182,7 @@ export default function PaymentPointersPage() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  copyToClipboard(pointer.wallet_address_url);
+                                  copyToClipboard(pointer.wallet_address);
                                 }}
                                 className="text-blue-600 hover:text-blue-900 mr-3"
                                 title="Copy payment pointer"
@@ -234,10 +236,10 @@ export default function PaymentPointersPage() {
                         <label className="block text-sm font-medium text-gray-700">Payment Pointer URL</label>
                         <div className="mt-1 flex">
                           <p className="text-sm text-gray-900 font-mono bg-gray-50 p-2 rounded-l border flex-1">
-                            {selectedPointer.wallet_address_url}
+                            {selectedPointer.wallet_address}
                           </p>
                           <button
-                            onClick={() => copyToClipboard(selectedPointer.wallet_address_url)}
+                            onClick={() => copyToClipboard(selectedPointer.wallet_address)}
                             className="bg-blue-500 text-white px-3 py-2 rounded-r hover:bg-blue-600 transition-colors"
                             title="Copy to clipboard"
                           >
@@ -249,7 +251,7 @@ export default function PaymentPointersPage() {
                       <div>
                         <label className="block text-sm font-medium text-gray-700">Wallet ID</label>
                         <p className="mt-1 text-sm text-gray-900 font-mono bg-gray-50 p-2 rounded border">
-                          {selectedPointer.wallet_address_id}
+                          {selectedPointer.wallet_id}
                         </p>
                       </div>
 

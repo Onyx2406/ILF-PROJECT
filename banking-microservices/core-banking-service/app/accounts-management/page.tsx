@@ -11,8 +11,8 @@ interface Account {
   iban: string;
   balance: string;
   status: 'active' | 'inactive' | 'deleted';
-  wallet_address_id?: string;
-  wallet_address_url?: string;
+  wallet_id?: string;
+  wallet_address?: string;
   wallet_public_name?: string;
   asset_id?: string;
   created_at: string;
@@ -80,9 +80,9 @@ export default function AccountsManagementPage() {
 
     // Wallet filter
     if (walletFilter === 'with-wallet') {
-      filtered = filtered.filter(account => account.wallet_address_url);
+      filtered = filtered.filter(account => account.wallet_address);
     } else if (walletFilter === 'without-wallet') {
-      filtered = filtered.filter(account => !account.wallet_address_url);
+      filtered = filtered.filter(account => !account.wallet_address);
     }
 
     setFilteredAccounts(filtered);
@@ -130,7 +130,7 @@ export default function AccountsManagementPage() {
     const total = filteredAccounts.length;
     const active = filteredAccounts.filter(acc => acc.status === 'active').length;
     const inactive = filteredAccounts.filter(acc => acc.status === 'inactive').length;
-    const withWallet = filteredAccounts.filter(acc => acc.wallet_address_url).length;
+    const withWallet = filteredAccounts.filter(acc => acc.wallet_address).length;
     const totalBalance = filteredAccounts.reduce((sum, acc) => sum + parseFloat(acc.balance || '0'), 0);
 
     return { total, active, inactive, withWallet, totalBalance };
@@ -438,7 +438,7 @@ export default function AccountsManagementPage() {
 
                       {/* Wallet */}
                       <div className="col-span-1 text-center">
-                        {account.wallet_address_url ? (
+                        {account.wallet_address ? (
                           <div className="inline-flex items-center justify-center w-8 h-8 bg-green-100 rounded-full">
                             <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

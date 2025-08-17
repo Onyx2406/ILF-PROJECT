@@ -15,7 +15,6 @@ interface AccountForm {
   name: string;
   email: string;
   currency: string;
-  balance: string;
   account_type: string;
 }
 
@@ -30,7 +29,6 @@ export default function CreateAccountPage() {
     name: '',
     email: '',
     currency: 'PKR',
-    balance: '0.00',
     account_type: 'SAVINGS'
   });
 
@@ -78,7 +76,8 @@ export default function CreateAccountPage() {
       const result = await response.json();
 
       if (result.success) {
-        router.push(`/customers/${customerId}`);
+        // Redirect to step 2: Add initial balance
+        router.push(`/customers/${customerId}/accounts/${result.data.id}/add-balance`);
       } else {
         alert(result.error?.message || 'Failed to create account');
       }
@@ -203,21 +202,6 @@ export default function CreateAccountPage() {
                       <option value="EUR">EUR - Euro</option>
                     </select>
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Initial Balance
-                    </label>
-                    <input
-                      type="number"
-                      name="balance"
-                      value={formData.balance}
-                      onChange={handleChange}
-                      min="0"
-                      step="0.01"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    />
-                  </div>
                 </div>
               </div>
 
@@ -266,7 +250,7 @@ export default function CreateAccountPage() {
                   disabled={isLoading}
                   className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-6 py-3 rounded-lg font-medium transition-colors"
                 >
-                  {isLoading ? 'Creating Account...' : 'Create Account'}
+                  {isLoading ? 'Creating Account...' : 'Create Account & Continue'}
                 </button>
                 <Link href={`/customers/${customerId}`}>
                   <button

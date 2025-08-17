@@ -25,8 +25,26 @@ interface Account {
   currency: string;
   balance: string;
   status: string;
+  username?: string;
   created_at: string;
 }
+
+interface Transaction {
+  id: number;
+  account_id: number;
+  transaction_type: string;
+  amount: string;
+  currency: string;
+  balance_after: string;
+  description: string;
+  reference_number: string;
+  status: string;
+  created_at: string;
+  related_account_name?: string;
+  related_account_iban?: string;
+}
+
+type TabType = 'accounts' | 'transactions';
 
 export default function CustomerDetailPage() {
   const params = useParams();
@@ -35,17 +53,31 @@ export default function CustomerDetailPage() {
   
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [accountsLoading, setAccountsLoading] = useState(true);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>('accounts');
 
   useEffect(() => {
     if (customerId) {
       fetchCustomer();
-      fetchCustomerAccounts();
     }
   }, [customerId]);
+
+  useEffect(() => {
+    if (customerId && customer) {
+      fetchCustomerAccounts();
+    }
+  }, [customerId, customer]);
+
+  useEffect(() => {
+    if (activeTab === 'transactions' && transactions.length === 0 && !transactionsLoading) {
+      fetchCustomerTransactions();
+    }
+  }, [activeTab]);
 
   const fetchCustomer = async () => {
     try {
@@ -76,6 +108,46 @@ export default function CustomerDetailPage() {
       setAccountsLoading(false);
     }
   };
+
+  const fetchCustomerTransactions = async () => {
+    setTransactionsLoading(true);
+    try {
+      let allTransactions: Transaction[] = [];
+      
+      // Fetch transactions for all accounts
+      for (const account of accounts) {
+        const response = await fetch(`/api/accounts/${account.id}/transactions`);
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success) {
+            // Add account info to each transaction
+            const accountTransactions = result.data.transactions.map((t: Transaction) => ({
+              ...t,
+              account_name: account.name,
+              account_iban: account.iban
+            }));
+            allTransactions = [...allTransactions, ...accountTransactions];
+          }
+        }
+      }
+      
+      // Sort by date (newest first)
+      allTransactions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      
+      setTransactions(allTransactions);
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+    } finally {
+      setTransactionsLoading(false);
+    }
+  };
+
+  // Update the useEffect to fetch transactions when accounts change and when transactions tab is selected
+  useEffect(() => {
+    if (activeTab === 'transactions' && accounts.length > 0) {
+      fetchCustomerTransactions();
+    }
+  }, [activeTab, accounts]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -290,81 +362,221 @@ export default function CustomerDetailPage() {
               </div>
             </div>
 
-            {/* Customer Accounts */}
+            {/* Accounts & Transactions Tabs */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-lg shadow">
-                <div className="px-6 py-4 border-b border-gray-200">
-                  <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-semibold text-gray-900">Customer Accounts</h2>
-                    <span className="text-sm text-gray-500">{accounts.length} accounts</span>
-                  </div>
+                {/* Tab Navigation */}
+                <div className="border-b border-gray-200">
+                  <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                    <button
+                      onClick={() => setActiveTab('accounts')}
+                      className={`py-4 px-6 border-b-2 font-medium text-sm ${
+                        activeTab === 'accounts'
+                          ? 'border-green-500 text-green-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center">
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        </svg>
+                        Accounts ({accounts.length})
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('transactions')}
+                      className={`py-4 px-6 border-b-2 font-medium text-sm ${
+                        activeTab === 'transactions'
+                          ? 'border-green-500 text-green-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center">
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        Transactions
+                      </div>
+                    </button>
+                  </nav>
                 </div>
-                
-                {accountsLoading ? (
-                  <div className="p-8 text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
-                    <p className="text-gray-600 mt-2">Loading accounts...</p>
+
+                {/* Tab Content */}
+                {activeTab === 'accounts' && (
+                  <div>
+                    {accountsLoading ? (
+                      <div className="p-8 text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
+                        <p className="text-gray-600 mt-2">Loading accounts...</p>
+                      </div>
+                    ) : accounts.length === 0 ? (
+                      <div className="p-8 text-center">
+                        <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        <h3 className="mt-2 text-sm font-medium text-gray-900">No accounts yet</h3>
+                        <p className="mt-1 text-sm text-gray-500">Get started by creating a new account for this customer.</p>
+                        <div className="mt-6">
+                          <Link href={`/customers/${customerId}/accounts/create`}>
+                            <button className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700">
+                              + Add Account
+                            </button>
+                          </Link>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IBAN</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {accounts.map((account) => (
+                              <tr key={account.id} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div>
+                                    <div className="text-sm font-medium text-gray-900">Account #{account.id}</div>
+                                    <div className="text-sm text-gray-500">{account.currency} Account</div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900 font-mono">{account.iban}</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  {account.username ? (
+                                    <div className="text-sm font-mono text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                                      {account.username}
+                                    </div>
+                                  ) : (
+                                    <div className="text-xs text-gray-400">No username</div>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {account.currency} {parseFloat(account.balance).toLocaleString()}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                    account.status === 'active' 
+                                      ? 'bg-green-100 text-green-800' 
+                                      : 'bg-red-100 text-red-800'
+                                  }`}>
+                                    {account.status}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {formatDate(account.created_at)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
-                ) : accounts.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    <h3 className="mt-2 text-sm font-medium text-gray-900">No accounts yet</h3>
-                    <p className="mt-1 text-sm text-gray-500">Get started by creating a new account for this customer.</p>
-                    <div className="mt-6">
-                      <Link href={`/customers/${customerId}/accounts/create`}>
-                        <button className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700">
-                          + Add Account
-                        </button>
-                      </Link>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IBAN</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {accounts.map((account) => (
-                          <tr key={account.id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div>
-                                <div className="text-sm font-medium text-gray-900">Account #{account.id}</div>
-                                <div className="text-sm text-gray-500">{account.currency} Account</div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900 font-mono">{account.iban}</div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm font-medium text-gray-900">
-                                {account.currency} {parseFloat(account.balance).toLocaleString()}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                account.status === 'active' 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : 'bg-red-100 text-red-800'
-                              }`}>
-                                {account.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {formatDate(account.created_at)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                )}
+
+                {activeTab === 'transactions' && (
+                  <div>
+                    {transactionsLoading ? (
+                      <div className="p-8 text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
+                        <p className="text-gray-600 mt-2">Loading transactions...</p>
+                      </div>
+                    ) : transactions.length === 0 ? (
+                      <div className="p-8 text-center">
+                        <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        <h3 className="mt-2 text-sm font-medium text-gray-900">No transactions yet</h3>
+                        <p className="mt-1 text-sm text-gray-500">Transactions will appear here when accounts are created with initial balances or when transfers are made.</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Balance After</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {transactions.map((transaction) => (
+                              <tr key={transaction.id} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">{formatDate(transaction.created_at)}</div>
+                                  <div className="text-xs text-gray-500">{new Date(transaction.created_at).toLocaleTimeString()}</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    Account #{transaction.account_id}
+                                  </div>
+                                  <div className="text-xs text-gray-500 font-mono">
+                                    {(transaction as any).account_iban}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                    transaction.transaction_type === 'CREDIT'
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-red-100 text-red-800'
+                                  }`}>
+                                    {transaction.transaction_type}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className={`text-sm font-medium ${
+                                    transaction.transaction_type === 'CREDIT' 
+                                      ? 'text-green-600' 
+                                      : 'text-red-600'
+                                  }`}>
+                                    {transaction.transaction_type === 'CREDIT' ? '+' : '-'}
+                                    {transaction.currency} {parseFloat(transaction.amount).toLocaleString()}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">
+                                    {transaction.currency} {parseFloat(transaction.balance_after).toLocaleString()}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="text-sm text-gray-900">{transaction.description}</div>
+                                  {transaction.reference_number && (
+                                    <div className="text-xs text-gray-500 font-mono">
+                                      Ref: {transaction.reference_number}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                    transaction.status === 'completed'
+                                      ? 'bg-green-100 text-green-800'
+                                      : transaction.status === 'pending'
+                                      ? 'bg-yellow-100 text-yellow-800'
+                                      : 'bg-red-100 text-red-800'
+                                  }`}>
+                                    {transaction.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

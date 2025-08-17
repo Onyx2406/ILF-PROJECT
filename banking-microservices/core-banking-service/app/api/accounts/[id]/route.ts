@@ -26,6 +26,9 @@ export async function GET(
         wallet_address,
         wallet_id,
         asset_id,
+        customer_id,
+        username,
+        password_hash,
         created_at,
         updated_at
       FROM accounts 
@@ -211,6 +214,102 @@ export async function DELETE(
     console.error('Error deleting account:', error);
     return NextResponse.json(
       { success: false, error: { message: 'Failed to delete account' } },
+      { status: 500 }
+    );
+  }
+}
+
+// POST - Add balance to account (for Step 2 of account creation)
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await ensureDatabaseInitialized();
+    
+    const { id } = await params;
+    const { amount } = await request.json();
+    
+    if (!amount || amount <= 0) {
+      return NextResponse.json(
+        { success: false, error: { message: 'Amount must be greater than 0' } },
+        { status: 400 }
+      );
+    }
+    
+    const db = getDatabase();
+    
+    // Start transaction
+    await db.query('BEGIN');
+    
+    try {
+      // Get current account
+      const accountResult = await db.query(
+        'SELECT * FROM accounts WHERE id = $1',
+        [id]
+      );
+      
+      if (accountResult.rows.length === 0) {
+        await db.query('ROLLBACK');
+        return NextResponse.json(
+          { success: false, error: { message: 'Account not found' } },
+          { status: 404 }
+        );
+      }
+      
+      const account = accountResult.rows[0];
+      const newBalance = parseFloat(account.balance) + parseFloat(amount);
+      
+      // Update account balance
+      await db.query(
+        'UPDATE accounts SET balance = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+        [newBalance, id]
+      );
+      
+      // Create transaction record
+      const transactionResult = await db.query(
+        `INSERT INTO transactions (
+          account_id, 
+          transaction_type, 
+          amount, 
+          currency, 
+          balance_after, 
+          description, 
+          reference_number, 
+          status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [
+          id,
+          'CREDIT',
+          amount,
+          account.currency,
+          newBalance,
+          'Initial balance deposit',
+          `INIT-${Date.now()}`,
+          'COMPLETED'
+        ]
+      );
+      
+      await db.query('COMMIT');
+      
+      return NextResponse.json({
+        success: true,
+        message: 'Balance added successfully',
+        data: {
+          account: { ...account, balance: newBalance },
+          transaction: transactionResult.rows[0]
+        }
+      });
+      
+    } catch (error) {
+      await db.query('ROLLBACK');
+      throw error;
+    }
+
+  } catch (error) {
+    console.error('Error adding balance:', error);
+    return NextResponse.json(
+      { success: false, error: { message: 'Failed to add balance' } },
       { status: 500 }
     );
   }
