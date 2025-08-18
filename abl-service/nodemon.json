@@ -1,9 +1,0 @@
-{
-  "watch": ["server/**/*"],
-  "ext": "js,json,ts",
-  "ignore": ["node_modules/**/*", ".next/**/*"],
-  "exec": "PGPASSWORD=postgres node server.js",
-  "env": {
-    "NODE_ENV": "development"
-  }
-}
