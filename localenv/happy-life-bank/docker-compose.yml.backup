@@ -67,7 +67,7 @@ services:
       ILP_CONNECTOR_URL: http://abl-backend:4002
       STREAM_SECRET: BjPXtnd00G2mRQwP/8ZpwyZASOch5sUXT5o0iR5b5wU=
       API_SECRET: iyIgCprjb9uL8wFckR+pLEkJWMB7FJhgkvqhTQR/964=
-      WEBHOOK_URL: http://oc-service:3300/api/webhooks/rafiki
+      WEBHOOK_URL: http://happy-life-bank-admin:4010/api/forward-webhook
       EXCHANGE_RATES_URL: http://happy-life-bank/rates
       OPEN_PAYMENTS_URL: ${HAPPY_LIFE_BANK_OPEN_PAYMENTS_URL:-https://abl-backend}
       REDIS_URL: redis://shared-redis:6379/2

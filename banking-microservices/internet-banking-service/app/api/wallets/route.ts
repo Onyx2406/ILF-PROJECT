@@ -12,11 +12,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`🔗 CREATING WALLET for account ID: ${accountId} via CBS → OC → Rafiki flow`);
+    console.log(`🔗 CREATING WALLET for account ID: ${accountId} via IB → CBS → OC → Rafiki flow`);
 
-    // Step 1: Call CBS directly to create wallet (CBS will handle OC → Rafiki communication)
-    console.log(`📋 Step 1: Calling CBS wallet creation endpoint...`);
-    const cbsWalletUrl = `http://oc-service:3300/api/quick/core-banking/accounts/${accountId}/wallet`;
+    // Step 1: Call CBS DIRECTLY (not through OC service)
+    console.log(`📋 Step 1: Calling CBS directly...`);
+    const cbsWalletUrl = `http://core-banking:3200/api/accounts/${accountId}/wallet`;
     
     const cbsPayload = publicName ? { publicName } : {};
     
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     const walletData = await cbsResponse.json();
-    console.log(`✅ Wallet created successfully via CBS → OC → Rafiki flow:`, walletData);
+    console.log(`✅ Wallet created successfully via IB → CBS → OC → Rafiki flow:`, walletData);
 
     return NextResponse.json(walletData);
 

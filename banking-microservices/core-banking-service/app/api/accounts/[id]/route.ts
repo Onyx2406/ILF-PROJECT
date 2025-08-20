@@ -258,12 +258,19 @@ export async function POST(
       }
       
       const account = accountResult.rows[0];
-      const newBalance = parseFloat(account.balance) + parseFloat(amount);
+      const newBalance = parseFloat(account.balance || '0') + parseFloat(amount);
+      const newAvailableBalance = parseFloat(account.available_balance || '0') + parseFloat(amount);
+      const newBookBalance = parseFloat(account.book_balance || '0') + parseFloat(amount);
       
-      // Update account balance
+      // Update account balance - update all balance fields for consistency
       await db.query(
-        'UPDATE accounts SET balance = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        [newBalance, id]
+        `UPDATE accounts 
+         SET balance = $1, 
+             available_balance = $2, 
+             book_balance = $3, 
+             updated_at = CURRENT_TIMESTAMP 
+         WHERE id = $4`,
+        [newBalance, newAvailableBalance, newBookBalance, id]
       );
       
       // Create transaction record
@@ -283,7 +290,7 @@ export async function POST(
           'CREDIT',
           amount,
           account.currency,
-          newBalance,
+          newAvailableBalance, // Use available balance as the primary balance reference
           'Initial balance deposit',
           `INIT-${Date.now()}`,
           'COMPLETED'
@@ -296,7 +303,12 @@ export async function POST(
         success: true,
         message: 'Balance added successfully',
         data: {
-          account: { ...account, balance: newBalance },
+          account: { 
+            ...account, 
+            balance: newBalance.toFixed(2),
+            available_balance: newAvailableBalance.toFixed(2),
+            book_balance: newBookBalance.toFixed(2)
+          },
           transaction: transactionResult.rows[0]
         }
       });

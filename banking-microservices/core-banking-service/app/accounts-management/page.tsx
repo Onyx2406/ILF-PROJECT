@@ -9,7 +9,10 @@ interface Account {
   name: string;
   email: string;
   iban: string;
+  currency: string;
   balance: string;
+  available_balance: string;
+  book_balance: string;
   status: 'active' | 'inactive' | 'deleted';
   wallet_id?: string;
   wallet_address?: string;
@@ -126,14 +129,22 @@ export default function AccountsManagementPage() {
     router.push(`/edit-account/${accountId}`);
   };
 
+  const formatCurrency = (amount: number, currency: string) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency,
+    }).format(amount);
+  };
+
   const getStatistics = () => {
     const total = filteredAccounts.length;
     const active = filteredAccounts.filter(acc => acc.status === 'active').length;
     const inactive = filteredAccounts.filter(acc => acc.status === 'inactive').length;
     const withWallet = filteredAccounts.filter(acc => acc.wallet_address).length;
-    const totalBalance = filteredAccounts.reduce((sum, acc) => sum + parseFloat(acc.balance || '0'), 0);
+    const totalAvailableBalance = filteredAccounts.reduce((sum, acc) => sum + parseFloat(acc.available_balance || acc.balance || '0'), 0);
+    const totalBookBalance = filteredAccounts.reduce((sum, acc) => sum + parseFloat(acc.book_balance || acc.balance || '0'), 0);
 
-    return { total, active, inactive, withWallet, totalBalance };
+    return { total, active, inactive, withWallet, totalAvailableBalance, totalBookBalance };
   };
 
   const stats = getStatistics();
@@ -258,8 +269,9 @@ export default function AccountsManagementPage() {
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-500">Total Balance</p>
-                  <p className="text-lg font-semibold text-gray-900">PKR {stats.totalBalance.toFixed(2)}</p>
+                  <p className="text-sm font-medium text-gray-500">Total Available Balance</p>
+                  <p className="text-lg font-semibold text-green-600">{stats.totalAvailableBalance.toFixed(2)} (Mixed)</p>
+                  <p className="text-xs text-gray-400">Book: {stats.totalBookBalance.toFixed(2)} (Mixed)</p>
                 </div>
               </div>
             </div>
@@ -378,7 +390,7 @@ export default function AccountsManagementPage() {
                 <div className="grid grid-cols-12 gap-4 text-sm font-semibold text-gray-700">
                   <div className="col-span-3">Account Holder</div>
                   <div className="col-span-3">IBAN</div>
-                  <div className="col-span-2">Balance</div>
+                  <div className="col-span-2">Balances (Available / Book)</div>
                   <div className="col-span-1">Status</div>
                   <div className="col-span-1">Wallet</div>
                   <div className="col-span-2">Actions</div>
@@ -415,9 +427,19 @@ export default function AccountsManagementPage() {
 
                       {/* Balance */}
                       <div className="col-span-2">
-                        <div className="text-right">
-                          <p className="text-lg font-semibold text-gray-900">PKR {parseFloat(account.balance || '0').toFixed(2)}</p>
-                          <p className="text-xs text-gray-500">Available Balance</p>
+                        <div className="text-right space-y-1">
+                          <div>
+                            <p className="text-lg font-semibold text-green-600">
+                              {formatCurrency(parseFloat(account.available_balance || account.balance || '0'), account.currency)}
+                            </p>
+                            <p className="text-xs text-gray-500">💰 Available Balance</p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-blue-600">
+                              {formatCurrency(parseFloat(account.book_balance || account.balance || '0'), account.currency)}
+                            </p>
+                            <p className="text-xs text-gray-500">📚 Book Balance</p>
+                          </div>
                         </div>
                       </div>
 

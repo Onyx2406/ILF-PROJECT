@@ -86,10 +86,16 @@ export default function TransactionsPage() {
     return new Date(dateString).toLocaleString();
   };
 
-  const formatAmount = (amount: string, type: string) => {
+  const formatAmount = (amount: string, type: string, currency: string) => {
     const value = parseFloat(amount);
-    const prefix = type === 'CREDIT' ? '+' : '-';
-    return `${prefix}PKR ${value.toLocaleString()}`;
+    // Credit transactions should be positive, debit transactions should be negative
+    const isCredit = type.includes('CREDIT');
+    const prefix = isCredit ? '+' : '-';
+    const colorClass = isCredit ? 'text-green-600' : 'text-red-600';
+    return {
+      formatted: `${prefix}${currency} ${value.toLocaleString()}`,
+      colorClass
+    };
   };
 
   const getTypeColor = (type: string) => {
@@ -277,15 +283,18 @@ export default function TransactionsPage() {
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className={`text-sm font-medium ${
-                              transaction.transaction_type === 'CREDIT' ? 'text-green-600' : 'text-red-600'
-                            }`}>
-                              {formatAmount(transaction.amount, transaction.transaction_type)}
-                            </div>
+                            {(() => {
+                              const amountInfo = formatAmount(transaction.amount, transaction.transaction_type, transaction.currency);
+                              return (
+                                <div className={`text-sm font-medium ${amountInfo.colorClass}`}>
+                                  {amountInfo.formatted}
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">
-                              PKR {parseFloat(transaction.balance_after).toLocaleString()}
+                              {transaction.currency} {parseFloat(transaction.balance_after).toLocaleString()}
                             </div>
                           </td>
                           <td className="px-6 py-4">

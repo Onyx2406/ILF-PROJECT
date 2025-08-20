@@ -11,7 +11,9 @@ CREATE TABLE accounts (
     email VARCHAR(255) UNIQUE NOT NULL,
     iban VARCHAR(34) UNIQUE NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'PKR', -- Keep but hidden from UI
-    balance DECIMAL(15,2) DEFAULT 0.00,
+    available_balance DECIMAL(15,2) DEFAULT 0.00, -- Available for use
+    book_balance DECIMAL(15,2) DEFAULT 0.00,      -- Total including pending
+    balance DECIMAL(15,2) DEFAULT 0.00,           -- Legacy field, will be same as available_balance
     account_type VARCHAR(50) DEFAULT 'SAVINGS',
     status VARCHAR(20) DEFAULT 'active',
     
@@ -20,9 +22,7 @@ CREATE TABLE accounts (
     password_hash VARCHAR(255),
     
     -- Wallet/ILP fields (nullable - only populated after wallet creation)
-    wallet_address_id VARCHAR(255) NULL,
-    wallet_address_url VARCHAR(500) NULL,
-    wallet_public_name VARCHAR(255) NULL,
+    wallet_id VARCHAR(255) NULL,
     asset_id VARCHAR(255) NULL,
     
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -107,3 +107,57 @@ CREATE INDEX IF NOT EXISTS idx_customer_accounts_account_id ON customer_accounts
 CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_reference ON transactions(reference_number);
 CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at);
+
+-- 6. Create webhooks table for persistent storage
+CREATE TABLE IF NOT EXISTS webhooks (
+    id VARCHAR(255) PRIMARY KEY, -- Rafiki webhook ID
+    webhook_type VARCHAR(100) NOT NULL, -- incoming_payment.created, etc.
+    status VARCHAR(20) DEFAULT 'received', -- received, processed, error
+    data JSONB NOT NULL, -- Full webhook payload
+    wallet_address_id VARCHAR(255),
+    account_id INTEGER REFERENCES accounts(id),
+    payment_amount DECIMAL(15,2),
+    payment_currency VARCHAR(3),
+    payment_id VARCHAR(255),
+    forwarded_by VARCHAR(50),
+    forwarded_at TIMESTAMP,
+    original_source VARCHAR(50),
+    processed_at TIMESTAMP,
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for webhooks table
+CREATE INDEX IF NOT EXISTS idx_webhooks_type ON webhooks(webhook_type);
+CREATE INDEX IF NOT EXISTS idx_webhooks_status ON webhooks(status);
+CREATE INDEX IF NOT EXISTS idx_webhooks_wallet_address_id ON webhooks(wallet_address_id);
+CREATE INDEX IF NOT EXISTS idx_webhooks_account_id ON webhooks(account_id);
+
+-- 7. Create pending_payments table for AML/CFT screening
+CREATE TABLE IF NOT EXISTS pending_payments (
+    id SERIAL PRIMARY KEY,
+    webhook_id VARCHAR(255) REFERENCES webhooks(id),
+    account_id INTEGER NOT NULL REFERENCES accounts(id),
+    amount DECIMAL(15,2) NOT NULL,
+    currency VARCHAR(3) NOT NULL,
+    payment_reference VARCHAR(255) NOT NULL,
+    payment_source TEXT, -- Description of payment source
+    sender_info JSONB, -- Information about sender
+    risk_score INTEGER DEFAULT 0, -- Risk assessment score (0-100)
+    status VARCHAR(20) DEFAULT 'PENDING', -- PENDING, APPROVED, REJECTED
+    screening_notes TEXT, -- AML officer notes
+    screened_by VARCHAR(255), -- Admin who screened
+    screened_at TIMESTAMP,
+    auto_approval_eligible BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for pending_payments table
+CREATE INDEX IF NOT EXISTS idx_pending_payments_status ON pending_payments(status);
+CREATE INDEX IF NOT EXISTS idx_pending_payments_account_id ON pending_payments(account_id);
+CREATE INDEX IF NOT EXISTS idx_pending_payments_risk_score ON pending_payments(risk_score);
+CREATE INDEX IF NOT EXISTS idx_pending_payments_created_at ON pending_payments(created_at);
+CREATE INDEX IF NOT EXISTS idx_webhooks_created_at ON webhooks(created_at);
+CREATE INDEX IF NOT EXISTS idx_webhooks_payment_id ON webhooks(payment_id);
