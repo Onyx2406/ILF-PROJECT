@@ -318,12 +318,6 @@ export default function CustomerDetailPage() {
                     <div className="text-2xl font-bold text-green-600">{accounts.length}</div>
                     <div className="text-sm text-gray-600">Total Accounts</div>
                   </div>
-                  <div className="text-center p-4 bg-blue-50 rounded-lg">
-                    <div className="text-2xl font-bold text-blue-600">
-                      PKR {calculateTotalBalance().toLocaleString()}
-                    </div>
-                    <div className="text-sm text-gray-600">Total Balance</div>
-                  </div>
                 </div>
               </div>
 

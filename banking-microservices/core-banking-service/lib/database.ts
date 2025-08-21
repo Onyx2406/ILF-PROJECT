@@ -179,6 +179,32 @@ async function createTables(db: Pool): Promise<void> {
     `);
     console.log('✅ Webhooks table created');
 
+    // Create pending_payments table for AML/CFT screening
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS pending_payments (
+        id SERIAL PRIMARY KEY,
+        webhook_id VARCHAR(255) REFERENCES webhooks(id),
+        account_id INTEGER NOT NULL REFERENCES accounts(id),
+        amount DECIMAL(15,2) NOT NULL,
+        currency VARCHAR(3) NOT NULL,
+        original_amount DECIMAL(15,2), -- Original amount before conversion
+        original_currency VARCHAR(3), -- Original currency before conversion (USD)
+        conversion_rate DECIMAL(10,6), -- Exchange rate used for conversion
+        payment_reference VARCHAR(255) NOT NULL,
+        payment_source TEXT, -- Description of payment source
+        sender_info JSONB, -- Information about sender
+        risk_score INTEGER DEFAULT 0, -- Risk assessment score (0-100)
+        status VARCHAR(20) DEFAULT 'PENDING', -- PENDING, APPROVED, REJECTED
+        screening_notes TEXT, -- AML officer notes
+        screened_by VARCHAR(255), -- Admin who screened
+        screened_at TIMESTAMP,
+        auto_approval_eligible BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('✅ Pending payments table created');
+
     // Create indexes for better performance
     try {
       await db.query(`
@@ -188,14 +214,13 @@ async function createTables(db: Pool): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
         CREATE INDEX IF NOT EXISTS idx_customers_cnic ON customers(cnic);
         CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);
-        CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at);
-        CREATE INDEX IF NOT EXISTS idx_customer_accounts_customer_id ON customer_accounts(customer_id);
         CREATE INDEX IF NOT EXISTS idx_webhooks_type ON webhooks(webhook_type);
         CREATE INDEX IF NOT EXISTS idx_webhooks_status ON webhooks(status);
-        CREATE INDEX IF NOT EXISTS idx_webhooks_wallet_address_id ON webhooks(wallet_address_id);
         CREATE INDEX IF NOT EXISTS idx_webhooks_account_id ON webhooks(account_id);
-        CREATE INDEX IF NOT EXISTS idx_webhooks_created_at ON webhooks(created_at);
-        CREATE INDEX IF NOT EXISTS idx_webhooks_payment_id ON webhooks(payment_id);
+        CREATE INDEX IF NOT EXISTS idx_pending_payments_status ON pending_payments(status);
+        CREATE INDEX IF NOT EXISTS idx_pending_payments_account_id ON pending_payments(account_id);
+        CREATE INDEX IF NOT EXISTS idx_pending_payments_risk_score ON pending_payments(risk_score);
+        CREATE INDEX IF NOT EXISTS idx_pending_payments_created_at ON pending_payments(created_at);
       `);
       
       // Create wallet-related indexes separately (these columns might not exist in old schemas)

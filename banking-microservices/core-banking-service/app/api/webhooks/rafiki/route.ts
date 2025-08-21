@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/database';
 import { ensureDatabaseInitialized } from '@/lib/init';
+import { convertUSDtoPKR, needsCurrencyConversion, formatCurrencyAmount, calculateConversionRisk } from '@/lib/currency';
 
 interface RafikiWebhookData {
   id: string;
@@ -67,19 +68,19 @@ export async function POST(request: NextRequest) {
       
       // Find account by wallet_id
       const accountResult = await db.query(
-        'SELECT id, name FROM accounts WHERE wallet_id = $1',
+        'SELECT id, name, currency FROM accounts WHERE wallet_id = $1',
         [walletAddressId]
       );
       
       if (accountResult.rows.length > 0) {
         accountId = accountResult.rows[0].id;
-        console.log(`✅ CBS: Found account ID ${accountId} for ${accountResult.rows[0].name}`);
+        console.log(`✅ CBS: Found account ID ${accountId} for ${accountResult.rows[0].name} (${accountResult.rows[0].currency})`);
       } else {
         console.log(`❌ CBS: No account found for wallet_id: ${walletAddressId}`);
         
         // Debug: Show what accounts exist
         const debugResult = await db.query(
-          'SELECT id, name, wallet_id FROM accounts WHERE wallet_id IS NOT NULL'
+          'SELECT id, name, wallet_id, currency FROM accounts WHERE wallet_id IS NOT NULL'
         );
         console.log('💡 CBS: Available wallet accounts:', debugResult.rows);
       }
@@ -328,6 +329,7 @@ async function processWebhook(webhook: RafikiWebhookData, accountId: number | nu
     );
 
     switch (webhook.type) {
+      case 'incoming.payment.completed':
       case 'incoming_payment.completed':
         console.log('💰 CBS: Incoming payment completed:', webhook.data.id);
         
@@ -339,33 +341,38 @@ async function processWebhook(webhook: RafikiWebhookData, accountId: number | nu
         }
         break;
         
+      case 'incoming.payment.created':
       case 'incoming_payment.created':
         console.log('📥 CBS: Incoming payment created:', webhook.data.id);
         break;
         
+      case 'incoming.payment.expired':
       case 'incoming_payment.expired':
         console.log('⏰ CBS: Incoming payment expired:', webhook.data.id);
         break;
         
+      case 'outgoing.payment.created':
       case 'outgoing_payment.created':
         console.log('📤 CBS: Outgoing payment created:', webhook.data.id);
         break;
         
+      case 'outgoing.payment.completed':
       case 'outgoing_payment.completed':
         console.log('✅ CBS: Outgoing payment completed:', webhook.data.id);
         // Note: Outgoing payments would typically debit the account,
         // but that should be handled when the payment is initiated
         break;
         
+      case 'outgoing.payment.failed':
       case 'outgoing_payment.failed':
         console.log('❌ CBS: Outgoing payment failed:', webhook.data.id);
         break;
         
-      case 'wallet_address.not_found':
+      case 'wallet.address.not_found':
         console.log('🔍 CBS: Wallet address not found:', webhook.data);
         break;
         
-      case 'wallet_address.web_monetization':
+      case 'wallet.address.web_monetization':
         console.log('💻 CBS: Web monetization payment:', webhook.data);
         break;
         
@@ -376,6 +383,7 @@ async function processWebhook(webhook: RafikiWebhookData, accountId: number | nu
         
       default:
         console.log(`❓ CBS: Unknown webhook type: ${webhook.type}`);
+        // Still mark as processed since we don't want to retry unknown types
         break;
     }
 
@@ -397,14 +405,14 @@ async function processWebhook(webhook: RafikiWebhookData, accountId: number | nu
 }
 
 /**
- * Credit book balance and create pending payment for AML screening
+ * Credit book balance and create pending payment for AML screening with currency conversion
  */
 async function creditBookBalanceAndCreatePendingPayment(accountId: number, amount: number, currency: string, webhook: RafikiWebhookData, db: any) {
   try {
     // Start transaction
     await db.query('BEGIN');
     
-    // Get current account details
+    // Get current account details including currency
     const accountResult = await db.query(
       'SELECT * FROM accounts WHERE id = $1 FOR UPDATE',
       [accountId]
@@ -415,36 +423,70 @@ async function creditBookBalanceAndCreatePendingPayment(accountId: number, amoun
     }
     
     const account = accountResult.rows[0];
-    const currentBookBalance = parseFloat(account.book_balance || account.balance || 0);
-    const newBookBalance = currentBookBalance + amount;
+    const accountCurrency = account.currency;
     
-    // Update book balance only (available balance stays the same)
+    console.log(`💰 Processing payment: ${formatCurrencyAmount(amount, currency)} → Account ${accountId} (${accountCurrency})`);
+    
+    // Variables for final amount and currency to credit
+    let finalAmount = amount;
+    let finalCurrency = currency;
+    let conversionDetails = null;
+    
+    // Check if currency conversion is needed (USD payment to PKR account)
+    if (needsCurrencyConversion(currency, accountCurrency)) {
+      console.log(`💱 Currency conversion required: ${currency} → ${accountCurrency}`);
+      
+      const conversion = await convertUSDtoPKR(amount);
+      finalAmount = conversion.convertedAmount;
+      finalCurrency = conversion.convertedCurrency;
+      conversionDetails = conversion;
+      
+      console.log(`✅ Converted ${formatCurrencyAmount(amount, currency)} to ${formatCurrencyAmount(finalAmount, finalCurrency)} at rate ${conversion.exchangeRate}`);
+    } else {
+      console.log(`✅ No conversion needed: Payment currency (${currency}) matches account currency (${accountCurrency})`);
+    }
+    
+    const currentBookBalance = parseFloat(account.book_balance || account.balance || 0);
+    const newBookBalance = currentBookBalance + finalAmount;
+    
+    // Update book balance only (available balance stays the same until AML approval)
     await db.query(
       'UPDATE accounts SET book_balance = $1, updated_at = NOW() WHERE id = $2',
       [newBookBalance.toFixed(2), accountId]
     );
     
-    // Create pending payment record for AML screening
+    // Calculate risk score (use original USD amount for international compliance)
+    const riskScore = conversionDetails 
+      ? calculateConversionRisk(amount, finalAmount)
+      : calculateRiskScore(webhook.data);
+    
+    // Create pending payment record for AML screening with conversion details
     const pendingPaymentResult = await db.query(
       `INSERT INTO pending_payments (
-        webhook_id, account_id, amount, currency, payment_reference,
-        payment_source, sender_info, risk_score, status, auto_approval_eligible
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+        webhook_id, account_id, amount, currency, 
+        original_amount, original_currency, conversion_rate,
+        payment_reference, payment_source, sender_info, 
+        risk_score, status, auto_approval_eligible
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
       [
         webhook.id,
         accountId,
-        amount,
-        currency,
+        finalAmount.toFixed(2),
+        finalCurrency,
+        conversionDetails ? amount.toFixed(2) : null,
+        conversionDetails ? currency : null,
+        conversionDetails ? conversionDetails.exchangeRate : null,
         `RAFIKI-${webhook.data.id}`,
-        `Incoming payment from Rafiki wallet: ${webhook.data.client || 'Unknown'}`,
+        `Incoming payment from Rafiki wallet: ${webhook.data.client || 'Unknown'}${conversionDetails ? ` (converted from ${formatCurrencyAmount(amount, currency)})` : ''}`,
         JSON.stringify({
           walletAddressId: webhook.data.walletAddressId,
           client: webhook.data.client,
-          metadata: webhook.data.metadata
+          metadata: webhook.data.metadata,
+          conversion: conversionDetails
         }),
-        calculateRiskScore(webhook.data), // Risk assessment
+        riskScore,
         'PENDING',
-        amount < 1000 // Auto-approve small amounts under $1000
+        finalAmount < (finalCurrency === 'PKR' ? 250000 : 1000) // Auto-approve: <$1000 USD or <₨250k PKR
       ]
     );
     
@@ -455,15 +497,19 @@ async function creditBookBalanceAndCreatePendingPayment(accountId: number, amoun
     await db.query(
       `INSERT INTO transactions (
         account_id, transaction_type, amount, currency, balance_after,
+        original_amount, original_currency, conversion_rate,
         description, reference_number, status, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())`,
       [
         accountId,
         'CREDIT_PENDING',
-        amount,
-        currency,
+        finalAmount.toFixed(2), // Use converted amount
+        finalCurrency, // Use converted currency
         newBookBalance.toFixed(2),
-        `Incoming payment from Rafiki (Pending AML): ${webhook.data.id}`,
+        conversionDetails ? amount.toFixed(2) : null, // Original amount
+        conversionDetails ? currency : null, // Original currency
+        conversionDetails ? conversionDetails.exchangeRate : null, // Conversion rate
+        `Incoming payment from Rafiki (Pending AML): ${webhook.data.id}${conversionDetails ? ` - Converted from ${formatCurrencyAmount(amount, currency)} at rate ${conversionDetails.exchangeRate}` : ''}`,
         transactionRef,
         'PENDING'
       ]

@@ -82,7 +82,10 @@ export async function GET(request: NextRequest) {
       accountEmail: row.account_email,
       accountIban: row.account_iban,
       amount: parseFloat(row.amount),
-      currency: row.account_currency, // Use account currency instead of pending payment currency
+      currency: row.currency, // Use pending payment currency (converted currency)
+      originalAmount: row.original_amount ? parseFloat(row.original_amount) : null,
+      originalCurrency: row.original_currency,
+      conversionRate: row.conversion_rate ? parseFloat(row.conversion_rate) : null,
       paymentReference: row.payment_reference,
       paymentSource: row.payment_source,
       senderInfo: row.sender_info,
@@ -172,16 +175,18 @@ export async function POST(request: NextRequest) {
           [payment.amount, payment.account_id]
         );
         
-        // Update transaction status to completed
+        // Update the existing PENDING transaction to COMPLETED status
         await db.query(
           `UPDATE transactions 
-           SET status = 'COMPLETED', description = description || ' - APPROVED'
+           SET status = 'COMPLETED', 
+               transaction_type = 'CREDIT',
+               description = REPLACE(description, 'Pending AML', 'Approved via AML screening')
            WHERE reference_number LIKE $1 
            AND account_id = $2 AND status = 'PENDING'`,
           [`%${String(payment.webhook_id).slice(-8)}%`, payment.account_id]
         );
         
-        console.log(`✅ AML: Payment ${paymentId} approved - Amount moved to available balance`);
+        console.log(`✅ AML: Payment ${paymentId} approved - Amount moved to available balance, transaction marked as COMPLETED`);
         
       } else if (action === 'REJECT') {
         // Reverse the book balance credit

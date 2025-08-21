@@ -85,7 +85,7 @@ services:
   internet-banking:
     build:
       context: ./internet-banking-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: internet-banking
     ports:
       - "3100:3100"
@@ -99,6 +99,11 @@ services:
       - ./internet-banking-service/components:/app/components
       - ./internet-banking-service/lib:/app/lib
       - ./internet-banking-service/public:/app/public
+      - ./internet-banking-service/package.json:/app/package.json
+      - ./internet-banking-service/next.config.js:/app/next.config.js
+      - ./internet-banking-service/tailwind.config.js:/app/tailwind.config.js
+      - ./internet-banking-service/postcss.config.js:/app/postcss.config.js
+      - ./internet-banking-service/tsconfig.json:/app/tsconfig.json
     depends_on:
       - oc-service
     networks:

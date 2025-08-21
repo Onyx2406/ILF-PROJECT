@@ -28,7 +28,7 @@ export default function CreateAccountPage() {
   const [ formData, setFormData] = useState<AccountForm>({
     name: '',
     email: '',
-    currency: 'PKR',
+    currency: 'USD', // Default to USD as per requirement
     account_type: 'SAVINGS'
   });
 
@@ -189,7 +189,7 @@ export default function CreateAccountPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Currency
+                      Account Currency
                     </label>
                     <select
                       name="currency"
@@ -197,10 +197,12 @@ export default function CreateAccountPage() {
                       onChange={handleChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                     >
-                      <option value="PKR">PKR - Pakistani Rupee</option>
-                      <option value="USD">USD - US Dollar</option>
-                      <option value="EUR">EUR - Euro</option>
+                      <option value="USD">USD - US Dollar Account (Direct USD payments)</option>
+                      <option value="PKR">PKR - Pakistani Rupee Account (USD payments auto-converted to PKR)</option>
                     </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      💡 All wallet addresses are created in USD. PKR accounts automatically convert USD payments to PKR using live exchange rates.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -216,27 +218,31 @@ export default function CreateAccountPage() {
                     </div>
                   </div>
                   <div>
-                    <h4 className="font-semibold text-blue-900 mb-3">Account Creation Process</h4>
+                    <h4 className="font-semibold text-blue-900 mb-3">💱 Currency & Wallet Information</h4>
                     <ul className="text-sm text-blue-800 space-y-2">
                       <li className="flex items-center space-x-2">
                         <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
-                        <span>Automatic IBAN generation for Pakistan</span>
+                        <span><strong>All wallets created in USD</strong> - Universal payment acceptance</span>
                       </li>
                       <li className="flex items-center space-x-2">
                         <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
-                        <span>Account linked to customer ID: {customer.c_id}</span>
+                        <span><strong>USD Account:</strong> Direct USD payments, no conversion</span>
                       </li>
                       <li className="flex items-center space-x-2">
                         <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
-                        <span>Relationship entry created in database</span>
+                        <span><strong>PKR Account:</strong> USD payments auto-converted to PKR using live rates</span>
                       </li>
                       <li className="flex items-center space-x-2">
                         <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
-                        <span>Account status set to "active"</span>
+                        <span>Automatic IBAN generation for Pakistan banking standards</span>
                       </li>
                       <li className="flex items-center space-x-2">
                         <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
-                        <span>Wallet address creation available via API only</span>
+                        <span>Account linked to customer ID: {customer?.c_id}</span>
+                      </li>
+                      <li className="flex items-center space-x-2">
+                        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
+                        <span>Wallet address creation available after account setup</span>
                       </li>
                     </ul>
                   </div>

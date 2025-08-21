@@ -91,6 +91,9 @@ CREATE TABLE IF NOT EXISTS transactions (
     transaction_type VARCHAR(20) NOT NULL, -- CREDIT, DEBIT, TRANSFER
     amount DECIMAL(15,2) NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'PKR',
+    original_amount DECIMAL(15,2), -- Original amount before conversion
+    original_currency VARCHAR(3), -- Original currency before conversion
+    conversion_rate DECIMAL(10,6), -- Exchange rate used for conversion
     balance_after DECIMAL(15,2) NOT NULL,
     description TEXT,
     reference_number VARCHAR(100) UNIQUE NOT NULL,
@@ -153,6 +156,11 @@ CREATE TABLE IF NOT EXISTS pending_payments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Add currency conversion columns (using ALTER to ensure they exist)
+ALTER TABLE pending_payments ADD COLUMN IF NOT EXISTS original_amount DECIMAL(15,2);
+ALTER TABLE pending_payments ADD COLUMN IF NOT EXISTS original_currency VARCHAR(3);
+ALTER TABLE pending_payments ADD COLUMN IF NOT EXISTS conversion_rate DECIMAL(10,6);
 
 -- Create indexes for pending_payments table
 CREATE INDEX IF NOT EXISTS idx_pending_payments_status ON pending_payments(status);

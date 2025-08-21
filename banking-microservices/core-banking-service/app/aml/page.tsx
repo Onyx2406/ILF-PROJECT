@@ -12,6 +12,9 @@ interface PendingPayment {
   accountIban: string;
   amount: number;
   currency: string;
+  originalAmount?: number; // Original amount before conversion
+  originalCurrency?: string; // Original currency before conversion
+  conversionRate?: number; // Exchange rate used for conversion
   paymentReference: string;
   paymentSource: string;
   senderInfo: any;
@@ -160,10 +163,6 @@ export default function AMLScreeningPage() {
               <div className="text-sm text-gray-600">High Risk</div>
             </div>
             <div className="bg-white p-4 rounded-lg shadow">
-              <div className="text-2xl font-bold text-purple-600">{formatCurrency(stats.totalAmount, 'USD')}</div>
-              <div className="text-sm text-gray-600">Total Amount</div>
-            </div>
-            <div className="bg-white p-4 rounded-lg shadow">
               <div className="text-2xl font-bold text-indigo-600">{stats.autoEligible}</div>
               <div className="text-sm text-gray-600">Auto Eligible</div>
             </div>
@@ -206,6 +205,9 @@ export default function AMLScreeningPage() {
                       Account
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Incoming Remittance
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Amount
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -231,6 +233,17 @@ export default function AMLScreeningPage() {
                         <div className="text-sm text-gray-500">{payment.accountIban}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
+                        {payment.originalAmount && payment.originalCurrency ? (
+                          <div className="text-sm font-medium text-blue-600">
+                            {formatCurrency(payment.originalAmount, payment.originalCurrency)}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-400">
+                            N/A
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
                           {formatCurrency(payment.amount, payment.currency)}
                         </div>
@@ -240,6 +253,7 @@ export default function AMLScreeningPage() {
                           </span>
                         )}
                       </td>
+                      
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRiskColor(payment.riskLevel)}`}>
                           {payment.riskLevel} ({payment.riskScore})
@@ -285,8 +299,8 @@ export default function AMLScreeningPage() {
                       <div><span className="font-medium">Name:</span> {selectedPayment.accountName}</div>
                       <div><span className="font-medium">Email:</span> {selectedPayment.accountEmail}</div>
                       <div><span className="font-medium">IBAN:</span> {selectedPayment.accountIban}</div>
+                      <div><span className="font-medium">Cuurent Balance:</span> {formatCurrency(selectedPayment.bookBalance, selectedPayment.currency)}</div>
                       <div><span className="font-medium">Available Balance:</span> {formatCurrency(selectedPayment.availableBalance, selectedPayment.currency)}</div>
-                      <div><span className="font-medium">Book Balance:</span> {formatCurrency(selectedPayment.bookBalance, selectedPayment.currency)}</div>
                     </div>
                   </div>
                   
@@ -295,6 +309,18 @@ export default function AMLScreeningPage() {
                     <h4 className="font-medium text-gray-900 mb-2">Payment Information</h4>
                     <div className="space-y-1 text-sm">
                       <div><span className="font-medium">Amount:</span> {formatCurrency(selectedPayment.amount, selectedPayment.currency)}</div>
+                      {selectedPayment.originalAmount && selectedPayment.originalCurrency && selectedPayment.conversionRate && (
+                        <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
+                          <div className="text-sm text-blue-800">
+                            <div className="font-medium">💱 Currency Conversion Applied</div>
+                            <div className="mt-1 space-y-1">
+                              <div><span className="font-medium">Original:</span> {formatCurrency(selectedPayment.originalAmount, selectedPayment.originalCurrency)}</div>
+                              <div><span className="font-medium">Converted:</span> {formatCurrency(selectedPayment.amount, selectedPayment.currency)}</div>
+                              <div><span className="font-medium">Exchange Rate:</span> {selectedPayment.conversionRate.toFixed(6)} {selectedPayment.originalCurrency}/{selectedPayment.currency}</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       <div><span className="font-medium">Risk Score:</span> 
                         <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRiskColor(selectedPayment.riskLevel)}`}>
                           {selectedPayment.riskLevel} ({selectedPayment.riskScore})
