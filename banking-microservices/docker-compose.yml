@@ -111,6 +111,32 @@ services:
       - rafiki
     restart: unless-stopped
 
+  # Demo Sender Service - For testing Rafiki payments
+  demo-sender:
+    build:
+      context: ./demo-sender
+      dockerfile: Dockerfile.dev
+    container_name: demo-sender
+    ports:
+      - "3400:3400"
+    environment:
+      - NODE_ENV=development
+      - PORT=3400
+      - NEXT_PUBLIC_RAFIKI_GRAPHQL_URL=http://localhost:3001/graphql
+      - RAFIKI_GRAPHQL_URL=http://cloud-nine-backend:3001/graphql
+    volumes:
+      - ./demo-sender/app:/app/app
+      - ./demo-sender/lib:/app/lib
+      - ./demo-sender/package.json:/app/package.json
+      - ./demo-sender/next.config.js:/app/next.config.js
+      - ./demo-sender/tailwind.config.js:/app/tailwind.config.js
+      - ./demo-sender/postcss.config.js:/app/postcss.config.js
+      - ./demo-sender/tsconfig.json:/app/tsconfig.json
+    networks:
+      - banking-network
+      - rafiki
+    restart: unless-stopped
+
 volumes:
   abl_postgres_data:
     driver: local
