@@ -37,7 +37,7 @@ interface Transaction {
   id: number;
   amount: string;
   currency: string;
-  type: string;
+  transaction_type: string;
   status: string;
   description: string;
   created_at: string;
@@ -266,25 +266,27 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-cyan-50">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-blue-50">
       {/* Modern Header */}
-      <div className="bg-white/80 backdrop-blur-sm shadow-sm border-b sticky top-0 z-10">
+      <div className="bg-gradient-to-r from-orange-500 to-blue-700 shadow-lg border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                {customer?.name.charAt(0).toUpperCase()}
-              </div>
+              <img 
+                src="/A.png" 
+                alt="Allied Bank Limited Logo" 
+                className="w-12 h-10 object-contain bg-white rounded-lg p-2 shadow-lg"
+              />
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                <h1 className="text-2xl font-bold text-white">
                   ABL Digital Wallet
                 </h1>
-                <p className="text-sm text-gray-600">Welcome back, {customer?.name}</p>
+                <p className="text-sm text-orange-200">Welcome back, {customer?.name}</p>
               </div>
             </div>
             <button
               onClick={handleLogout}
-              className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200 hover:scale-105"
+              className="flex items-center space-x-2 px-4 py-2 text-sm text-white hover:bg-white/20 rounded-lg transition-all duration-200 hover:scale-105"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -297,14 +299,14 @@ export default function DashboardPage() {
 
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Wallet Balance Card */}
-        <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-3xl p-8 text-white shadow-2xl mb-8">
+        <div className="bg-gradient-to-br from-orange-500 to-blue-700 rounded-3xl p-8 text-white shadow-2xl mb-8">
           <div className="flex justify-between items-start mb-6">
             <div>
-              <p className="text-indigo-200 text-sm font-medium">Total Balance</p>
+              <p className="text-orange-200 text-sm font-medium">Total Balance</p>
               <h2 className="text-4xl font-bold mt-2">
                 {accounts.length > 0 ? formatBalance(accounts[0].balance, accounts[0].currency) : 'Loading...'}
               </h2>
-              <p className="text-indigo-200 text-sm mt-2">
+              <p className="text-orange-200 text-sm mt-2">
                 Account: {authenticatedAccount?.username}
               </p>
             </div>
@@ -377,7 +379,7 @@ export default function DashboardPage() {
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`flex-1 px-6 py-4 text-sm font-medium transition-all duration-200 ${
                   activeTab === tab.id
-                    ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50'
+                    ? 'text-orange-600 border-b-2 border-orange-600 bg-orange-50'
                     : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                 }`}
               >
@@ -460,13 +462,15 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {transactions.map((transaction) => (
+                {transactions.map((transaction) => {
+                  console.log('Transaction debug:', transaction.transaction_type, transaction.amount, transaction.description);
+                  return (
                   <div key={transaction.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
                     <div className="flex items-center space-x-4">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        transaction.type === 'CREDIT' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                        transaction.transaction_type === 'CREDIT' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
                       }`}>
-                        {transaction.type === 'CREDIT' ? '↓' : '↑'}
+                        {transaction.transaction_type === 'CREDIT' ? '↓' : '↑'}
                       </div>
                       <div>
                         <p className="font-medium text-gray-900">{transaction.description}</p>
@@ -475,9 +479,9 @@ export default function DashboardPage() {
                     </div>
                     <div className="text-right">
                       <p className={`font-semibold ${
-                        transaction.type === 'CREDIT' ? 'text-green-600' : 'text-red-600'
+                        transaction.transaction_type === 'CREDIT' ? 'text-green-600' : 'text-red-600'
                       }`}>
-                        {transaction.type === 'CREDIT' ? '+' : '-'}{formatBalance(transaction.amount, transaction.currency)}
+                        {transaction.transaction_type === 'CREDIT' ? '+' : '-'}{transaction.currency} {Math.abs(parseFloat(transaction.amount)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                         transaction.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
@@ -486,7 +490,8 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -499,7 +504,7 @@ export default function DashboardPage() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* IBAN Sharing */}
-              <div className="border border-gray-200 rounded-xl p-6 hover:border-indigo-300 transition-colors">
+              <div className="border border-gray-200 rounded-xl p-6 hover:border-orange-300 transition-colors">
                 <h4 className="font-semibold text-gray-900 mb-3">Bank Transfer (IBAN)</h4>
                 <div className="space-y-3">
                   <div>
@@ -512,7 +517,7 @@ export default function DashboardPage() {
                   </div>
                   <button
                     onClick={shareIban}
-                    className="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors"
+                    className="w-full bg-orange-600 text-white py-2 px-4 rounded-lg hover:bg-orange-700 transition-colors"
                   >
                     Share IBAN Details
                   </button>
@@ -520,7 +525,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Wallet Sharing */}
-              <div className="border border-gray-200 rounded-xl p-6 hover:border-purple-300 transition-colors">
+              <div className="border border-gray-200 rounded-xl p-6 hover:border-blue-300 transition-colors">
                 <h4 className="font-semibold text-gray-900 mb-3">Digital Wallet</h4>
                 {accounts[0]?.wallet_address ? (
                   <div className="space-y-3">
@@ -530,7 +535,7 @@ export default function DashboardPage() {
                     </div>
                     <button
                       onClick={shareWalletAddress}
-                      className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors"
+                      className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
                     >
                       Share Wallet Address
                     </button>
@@ -544,7 +549,7 @@ export default function DashboardPage() {
                     <button
                       onClick={() => accounts[0] && createWalletAddress(accounts[0].id)}
                       disabled={accounts[0] && walletLoading[accounts[0].id]}
-                      className="bg-purple-600 text-white py-2 px-6 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+                      className="bg-blue-600 text-white py-2 px-6 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
                     >
                       {accounts[0] && walletLoading[accounts[0].id] ? 'Creating...' : 'Create Wallet'}
                     </button>
@@ -619,7 +624,7 @@ export default function DashboardPage() {
                     copyToClipboard(shareText, 'details');
                   }
                 }}
-                className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
               >
                 Share Details
               </button>
@@ -645,7 +650,7 @@ export default function DashboardPage() {
                 </div>
                 <button
                   onClick={() => copyToClipboard(accounts[0].wallet_address!, 'address')}
-                  className="ml-2 text-purple-600 hover:text-purple-700"
+                  className="ml-2 text-blue-600 hover:text-blue-700"
                 >
                   {copied === 'address' ? '✓' : '📋'}
                 </button>
@@ -668,7 +673,7 @@ export default function DashboardPage() {
                     copyToClipboard(shareText, 'wallet');
                   }
                 }}
-                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 Share Address
               </button>

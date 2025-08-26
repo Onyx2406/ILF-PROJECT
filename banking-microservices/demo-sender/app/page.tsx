@@ -17,8 +17,8 @@ export default function DemoSenderPage() {
   const [amount, setAmount] = useState('5.00');
   const [senderWalletId, setSenderWalletId] = useState('2cf06058-a987-4914-8ea7-449a4137dc19'); // Using specified wallet ID
   const [senderName, setSenderName] = useState('John Doe');
-  const [senderWalletAddress, setSenderWalletAddress] = useState('https://cloud-nine-wallet/john.doe');
-  const [description, setDescription] = useState('Cross-currency payment');
+  const [senderWalletAddress, setSenderWalletAddress] = useState('https://bankofamerica.com/john.doe');
+  const [description, setDescription] = useState('Bank of America cross-currency payment');
   const [steps, setSteps] = useState<PaymentStep[]>([
     { step: 1, title: 'Create Receiver', status: 'pending' },
     { step: 2, title: 'Create Quote', status: 'pending' },
@@ -33,7 +33,7 @@ export default function DemoSenderPage() {
 
   // Using hardcoded wallet ID - no need to fetch dynamically
   useEffect(() => {
-    addLog(`✅ Using Cloud Nine wallet ID: ${senderWalletId}`);
+    addLog(`🏦 Bank of America wallet ID configured: ${senderWalletId}`);
   }, []);
 
   const updateStep = (stepNumber: number, status: PaymentStep['status'], data?: any, error?: string) => {
@@ -204,55 +204,79 @@ export default function DemoSenderPage() {
   const getStepIcon = (status: PaymentStep['status']) => {
     switch (status) {
       case 'loading':
-        return <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>;
+        return <div className="animate-spin rounded-full h-6 w-6 border-2 border-red-600 border-t-transparent"></div>;
       case 'success':
-        return <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center text-white text-xs">✓</div>;
+        return <div className="w-6 h-6 bg-gradient-to-r from-green-500 to-green-600 rounded-full flex items-center justify-center text-white text-sm shadow-md">✓</div>;
       case 'error':
-        return <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs">✗</div>;
+        return <div className="w-6 h-6 bg-gradient-to-r from-red-500 to-red-600 rounded-full flex items-center justify-center text-white text-sm shadow-md">✗</div>;
       default:
-        return <div className="w-5 h-5 bg-gray-300 rounded-full"></div>;
+        return <div className="w-6 h-6 bg-gray-300 rounded-full border-2 border-gray-400"></div>;
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 to-blue-50 py-8">
       <div className="max-w-4xl mx-auto px-4">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Demo Sender</h1>
-          <p className="text-gray-600">
-            Send payments from Cloud Nine wallet to ABL via Rafiki with custom metadata
+        <div className="bg-white rounded-lg shadow-lg border border-red-100 p-6 mb-6">
+          <div className="flex items-center space-x-4 mb-4">
+            {/* Bank of America Logo */}
+            <div className="w-16 h-16 bg-gradient-to-r from-red-600 to-blue-700 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-xl">BoA</span>
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-red-600 to-blue-700 bg-clip-text text-transparent mb-1">
+                Bank of America
+              </h1>
+              <p className="text-lg font-medium text-gray-700">Payment Demo Portal</p>
+            </div>
+          </div>
+          <p className="text-gray-600 border-l-4 border-red-500 pl-4">
+            Send secure payments from Bank of America to other financial institutions via Rafiki with enhanced metadata tracking
           </p>
         </div>
 
         {/* Payment Form */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Payment Details</h2>
+        <div className="bg-white rounded-lg shadow-lg border border-red-100 p-6 mb-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="w-8 h-8 bg-gradient-to-r from-red-600 to-blue-700 rounded flex items-center justify-center">
+              <span className="text-white text-sm">💳</span>
+            </div>
+            <h2 className="text-xl font-semibold bg-gradient-to-r from-red-600 to-blue-700 bg-clip-text text-transparent">
+              Payment Details
+            </h2>
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Sender Wallet ID (Cloud Nine)
+                <span className="flex items-center space-x-2">
+                  <span>🏦</span>
+                  <span>Bank of America Wallet ID</span>
+                </span>
               </label>
               <input
                 type="text"
                 value={senderWalletId}
                 onChange={(e) => setSenderWalletId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter sender wallet ID"
+                className="w-full px-3 py-2 border-2 border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                placeholder="Enter Bank of America wallet ID"
               />
             </div>
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Amount (USD)
+                <span className="flex items-center space-x-2">
+                  <span>💰</span>
+                  <span>Amount (USD)</span>
+                </span>
               </label>
               <input
                 type="number"
                 step="0.01"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border-2 border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
                 placeholder="5.00"
               />
             </div>
@@ -260,58 +284,77 @@ export default function DemoSenderPage() {
 
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Recipient Wallet Address (ABL)
+              <span className="flex items-center space-x-2">
+                <span>🎯</span>
+                <span>Recipient Wallet Address (ABL)</span>
+              </span>
             </label>
             <input
               type="text"
               value={recipientWalletAddress}
               onChange={(e) => setRecipientWalletAddress(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
               placeholder="https://abl-backend/PK47ABBL8950311861785523"
             />
           </div>
 
           {/* Metadata Section */}
-          <div className="border-t pt-6 mb-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Payment Metadata (will appear in webhooks)</h3>
+          <div className="border-t-2 border-red-100 pt-6 mb-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-8 h-8 bg-gradient-to-r from-red-600 to-blue-700 rounded flex items-center justify-center">
+                <span className="text-white text-sm">📄</span>
+              </div>
+              <h3 className="text-lg font-medium bg-gradient-to-r from-red-600 to-blue-700 bg-clip-text text-transparent">
+                Payment Metadata (will appear in webhooks)
+              </h3>
+            </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Sender Name
+                  <span className="flex items-center space-x-2">
+                    <span>👤</span>
+                    <span>Sender Name</span>
+                  </span>
                 </label>
                 <input
                   type="text"
                   value={senderName}
                   onChange={(e) => setSenderName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
                   placeholder="John Doe"
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Sender Wallet Address
+                  <span className="flex items-center space-x-2">
+                    <span>🏦</span>
+                    <span>Bank of America Wallet Address</span>
+                  </span>
                 </label>
                 <input
                   type="text"
                   value={senderWalletAddress}
                   onChange={(e) => setSenderWalletAddress(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="https://cloud-nine-wallet/john.doe"
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                  placeholder="https://bankofamerica.com/john.doe"
                 />
               </div>
             </div>
 
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Description
+                <span className="flex items-center space-x-2">
+                  <span>📝</span>
+                  <span>Description</span>
+                </span>
               </label>
               <input
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border-2 border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
                 placeholder="Cross-currency payment"
               />
             </div>
@@ -320,15 +363,32 @@ export default function DemoSenderPage() {
           <button
             onClick={sendPayment}
             disabled={isProcessing}
-            className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+            className="w-full bg-gradient-to-r from-red-600 to-blue-700 text-white py-4 px-6 rounded-lg hover:from-red-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-lg shadow-lg transition-all duration-200 transform hover:scale-[1.02]"
           >
-            {isProcessing ? 'Processing Payment...' : 'Send Payment with Metadata'}
+            {isProcessing ? (
+              <span className="flex items-center justify-center space-x-2">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span>Processing Bank of America Payment...</span>
+              </span>
+            ) : (
+              <span className="flex items-center justify-center space-x-2">
+                <span>🚀</span>
+                <span>Send Payment with Bank of America</span>
+              </span>
+            )}
           </button>
         </div>
 
         {/* Payment Steps */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Payment Process</h2>
+        <div className="bg-white rounded-lg shadow-lg border border-red-100 p-6 mb-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="w-8 h-8 bg-gradient-to-r from-red-600 to-blue-700 rounded flex items-center justify-center">
+              <span className="text-white text-sm">⚡</span>
+            </div>
+            <h2 className="text-xl font-semibold bg-gradient-to-r from-red-600 to-blue-700 bg-clip-text text-transparent">
+              Payment Process
+            </h2>
+          </div>
           
           <div className="space-y-4">
             {steps.map((step, index) => (
@@ -358,11 +418,18 @@ export default function DemoSenderPage() {
 
         {/* Logs */}
         {logs.length > 0 && (
-          <div className="bg-gray-900 rounded-lg p-4">
-            <h2 className="text-lg font-semibold text-white mb-3">Activity Log</h2>
-            <div className="space-y-1 max-h-64 overflow-y-auto">
+          <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-lg shadow-lg border border-red-100 p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-8 h-8 bg-gradient-to-r from-red-600 to-blue-700 rounded flex items-center justify-center">
+                <span className="text-white text-sm">📊</span>
+              </div>
+              <h2 className="text-lg font-semibold text-white">
+                Bank of America Transaction Log
+              </h2>
+            </div>
+            <div className="space-y-1 max-h-64 overflow-y-auto bg-black bg-opacity-50 rounded-lg p-3">
               {logs.map((log, index) => (
-                <div key={index} className="text-sm text-gray-300 font-mono">
+                <div key={index} className="text-sm text-green-300 font-mono leading-relaxed">
                   {log}
                 </div>
               ))}
