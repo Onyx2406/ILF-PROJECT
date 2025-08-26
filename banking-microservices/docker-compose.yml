@@ -73,7 +73,6 @@ services:
       - RAFIKI_URL=http://localhost:4001
     volumes:
       - ./oc-service/src:/app/src
-      - ./oc-service/admin-ui:/app/admin-ui
     depends_on:
       - core-banking
     networks:
