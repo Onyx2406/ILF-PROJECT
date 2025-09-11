@@ -169,3 +169,60 @@ CREATE INDEX IF NOT EXISTS idx_pending_payments_risk_score ON pending_payments(r
 CREATE INDEX IF NOT EXISTS idx_pending_payments_created_at ON pending_payments(created_at);
 CREATE INDEX IF NOT EXISTS idx_webhooks_created_at ON webhooks(created_at);
 CREATE INDEX IF NOT EXISTS idx_webhooks_payment_id ON webhooks(payment_id);
+
+-- ========================================
+-- AIML FRAUD DETECTION SYSTEM - NEW ADDITION
+-- ========================================
+
+-- 8. Create block_list table for AIML fraud detection
+CREATE TABLE IF NOT EXISTS block_list (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    type VARCHAR(50) NOT NULL DEFAULT 'INDIVIDUAL', -- INDIVIDUAL, ENTITY, ORGANIZATION
+    reason VARCHAR(255) NOT NULL,
+    severity VARCHAR(20) NOT NULL DEFAULT 'HIGH', -- LOW, MEDIUM, HIGH, CRITICAL
+    added_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    added_by VARCHAR(100) DEFAULT 'SYSTEM',
+    is_active BOOLEAN DEFAULT TRUE,
+    notes TEXT
+);
+
+-- 9. Create aiml_blocked_payments table for tracking blocked payments
+CREATE TABLE IF NOT EXISTS aiml_blocked_payments (
+    id SERIAL PRIMARY KEY,
+    payment_id VARCHAR(255) NOT NULL,
+    receiver_name VARCHAR(255) NOT NULL,
+    sender_wallet_address VARCHAR(500),
+    receiver_wallet_address VARCHAR(500),
+    amount DECIMAL(15,2) NOT NULL,
+    currency VARCHAR(10) NOT NULL,
+    blocked_reason VARCHAR(255) NOT NULL,
+    matched_block_list_id INTEGER REFERENCES block_list(id),
+    blocked_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    payment_metadata JSONB,
+    webhook_data JSONB,
+    status VARCHAR(20) DEFAULT 'BLOCKED'
+);
+
+-- Insert sample block list entries for AIML testing
+INSERT INTO block_list (name, type, reason, severity, notes) VALUES 
+('Usama bin Laden', 'INDIVIDUAL', 'Terrorist Organization Leader', 'CRITICAL', 'Former Al-Qaeda leader'),
+('Osama bin Laden', 'INDIVIDUAL', 'Terrorist Organization Leader', 'CRITICAL', 'Alternative spelling'),
+('Ayman al-Zawahiri', 'INDIVIDUAL', 'Terrorist Organization Leader', 'CRITICAL', 'Al-Qaeda leader'),
+('Abu Bakr al-Baghdadi', 'INDIVIDUAL', 'Terrorist Organization Leader', 'CRITICAL', 'Former ISIS leader'),
+('Joaquín Guzmán', 'INDIVIDUAL', 'Drug Cartel Leader', 'HIGH', 'El Chapo - Drug trafficking'),
+('Pablo Escobar', 'INDIVIDUAL', 'Drug Cartel Leader', 'HIGH', 'Historical drug lord'),
+('Al-Qaeda', 'ORGANIZATION', 'Terrorist Organization', 'CRITICAL', 'International terrorist group'),
+('ISIS', 'ORGANIZATION', 'Terrorist Organization', 'CRITICAL', 'Islamic State'),
+('Taliban', 'ORGANIZATION', 'Terrorist Organization', 'CRITICAL', 'Afghan militant group'),
+('Hezbollah', 'ORGANIZATION', 'Terrorist Organization', 'HIGH', 'Lebanon-based organization'),
+('Anonymous Shell Company', 'ENTITY', 'Money Laundering', 'MEDIUM', 'Suspicious business entity'),
+('Fake Bank Ltd', 'ENTITY', 'Fraudulent Institution', 'HIGH', 'Known fraudulent bank');
+
+-- Create indexes for AIML tables
+CREATE INDEX IF NOT EXISTS idx_block_list_name ON block_list(LOWER(name));
+CREATE INDEX IF NOT EXISTS idx_block_list_active ON block_list(is_active);
+CREATE INDEX IF NOT EXISTS idx_block_list_severity ON block_list(severity);
+CREATE INDEX IF NOT EXISTS idx_aiml_blocked_timestamp ON aiml_blocked_payments(blocked_timestamp);
+CREATE INDEX IF NOT EXISTS idx_aiml_blocked_status ON aiml_blocked_payments(status);
+CREATE INDEX IF NOT EXISTS idx_aiml_blocked_payment_id ON aiml_blocked_payments(payment_id);

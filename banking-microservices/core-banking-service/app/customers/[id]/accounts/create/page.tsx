@@ -31,6 +31,7 @@ export default function CreateAccountPage() {
     currency: 'USD', // Default to USD as per requirement
     account_type: 'SAVINGS'
   });
+  const [error, setError] = useState<string>('');
 
   useEffect(() => {
     fetchCustomer();
@@ -46,7 +47,7 @@ export default function CreateAccountPage() {
         setFormData(prev => ({
           ...prev,
           name: data.data.name,
-          email: data.data.email
+          email: data.data.email // Use same email as customer
         }));
       }
     } catch (error) {
@@ -63,6 +64,8 @@ export default function CreateAccountPage() {
     e.preventDefault();
     
     setIsLoading(true);
+    setError(''); // Clear any previous errors
+    
     try {
       const response = await fetch(`/api/customers/${customerId}/accounts`, {
         method: 'POST',
@@ -75,15 +78,17 @@ export default function CreateAccountPage() {
 
       const result = await response.json();
 
-      if (result.success) {
+      if (result.success && result.data && result.data.id) {
         // Redirect to step 2: Add initial balance
         router.push(`/customers/${customerId}/accounts/${result.data.id}/add-balance`);
       } else {
-        alert(result.error?.message || 'Failed to create account');
+        // Handle various error cases
+        const errorMessage = result.error?.message || 'Failed to create account. Please try again.';
+        setError(errorMessage);
       }
     } catch (error) {
       console.error('Error creating account:', error);
-      alert('Failed to create account');
+      setError('Network error. Please check your connection and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -137,6 +142,20 @@ export default function CreateAccountPage() {
           </div>
 
           <div className="bg-white rounded-lg shadow p-8">
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                <div className="flex items-center space-x-2">
+                  <div className="w-5 h-5 text-red-600">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-red-800 font-medium">{error}</p>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
@@ -168,6 +187,9 @@ export default function CreateAccountPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                       required
                     />
+                    <p className="text-xs text-gray-500 mt-1">
+                      💡 This can be the same email as the customer's email address.
+                    </p>
                   </div>
 
                   <div>

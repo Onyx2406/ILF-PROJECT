@@ -28,6 +28,35 @@ interface PendingPayment {
   webhookData: any;
 }
 
+interface BlockedPayment {
+  id: number;
+  webhook_id: string;
+  account_id: number;
+  amount: number | string;
+  currency: string;
+  blocked_reason: string;
+  matched_block_list_id: number;
+  risk_score: number;
+  blocked_at: string;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  status: string;
+  blocked_entity_name?: string;
+  severity?: number;
+}
+
+interface BlockListEntry {
+  id: number;
+  name: string;
+  type: 'INDIVIDUAL' | 'ENTITY' | 'ORGANIZATION';
+  reason: string;
+  severity: number;
+  is_active: boolean;
+  created_at: string;
+  added_by: string;
+  notes?: string;
+}
+
 interface AMLStats {
   totalPending: number;
   lowRisk: number;
@@ -39,35 +68,57 @@ interface AMLStats {
 
 export default function AMLScreeningPage() {
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
+  const [blockedPayments, setBlockedPayments] = useState<BlockedPayment[]>([]);
+  const [blockList, setBlockList] = useState<BlockListEntry[]>([]);
   const [stats, setStats] = useState<AMLStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'pending' | 'blocked' | 'blocklist'>('pending');
   const [riskFilter, setRiskFilter] = useState<string>('ALL');
   const [selectedPayment, setSelectedPayment] = useState<PendingPayment | null>(null);
   const [screeningNotes, setScreeningNotes] = useState('');
   const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
-    fetchPendingPayments();
-    const interval = setInterval(fetchPendingPayments, 10000); // Refresh every 10 seconds
+    fetchData();
+    const interval = setInterval(fetchData, 10000); // Refresh every 10 seconds
     return () => clearInterval(interval);
-  }, [riskFilter]);
+  }, [riskFilter, activeTab]);
 
-  const fetchPendingPayments = async () => {
+  const fetchData = async () => {
     try {
-      const params = new URLSearchParams();
+      // Always fetch pending payments for stats
+      const pendingParams = new URLSearchParams();
       if (riskFilter !== 'ALL') {
-        params.append('riskLevel', riskFilter);
+        pendingParams.append('riskLevel', riskFilter);
       }
       
-      const response = await fetch(`/api/aml/pending-payments?${params}`);
-      const result = await response.json();
+      const pendingResponse = await fetch(`/api/aml/pending-payments?${pendingParams}`);
+      const pendingResult = await pendingResponse.json();
       
-      if (result.success) {
-        setPendingPayments(result.data.pendingPayments);
-        setStats(result.data.stats);
+      if (pendingResult.success) {
+        setPendingPayments(pendingResult.data.pendingPayments);
+        setStats(pendingResult.data.stats);
+      }
+
+      // Fetch blocked payments if on blocked tab
+      if (activeTab === 'blocked') {
+        const blockedResponse = await fetch('/api/aiml/blocked-payments');
+        const blockedResult = await blockedResponse.json();
+        if (blockedResult.success) {
+          setBlockedPayments(blockedResult.data);
+        }
+      }
+
+      // Fetch block list if on blocklist tab
+      if (activeTab === 'blocklist') {
+        const blockListResponse = await fetch('/api/aiml/block-list');
+        const blockListResult = await blockListResponse.json();
+        if (blockListResult.success) {
+          setBlockList(blockListResult.data);
+        }
       }
     } catch (error) {
-      console.error('Error fetching pending payments:', error);
+      console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
@@ -76,6 +127,8 @@ export default function AMLScreeningPage() {
   const handlePaymentAction = async (paymentId: number, action: 'APPROVE' | 'REJECT') => {
     setProcessing(true);
     try {
+      // All pending payments (both approve and reject) use the pending payments API
+      // The updated API now handles the complete reversal flow for rejections
       const response = await fetch('/api/aml/pending-payments', {
         method: 'POST',
         headers: {
@@ -85,7 +138,7 @@ export default function AMLScreeningPage() {
           paymentId,
           action,
           screeningNotes,
-          screenedBy: 'AML Officer' // In real implementation, get from auth
+          screenedBy: 'AML Officer'
         }),
       });
 
@@ -93,10 +146,18 @@ export default function AMLScreeningPage() {
       
       if (result.success) {
         // Refresh the list
-        await fetchPendingPayments();
+        await fetchData();
         setSelectedPayment(null);
         setScreeningNotes('');
-        alert(`Payment ${action.toLowerCase()}d successfully!`);
+        
+        if (action === 'REJECT') {
+          const reversalInfo = result.data?.reversal?.status === 'COMPLETED' 
+            ? `Payment rejected and reversed back to sender (ID: ${result.data.reversal.paymentId})`
+            : `Payment rejected with complete reversal flow. ${result.data?.reversal?.error || 'Reversal may require manual intervention'}`;
+          alert(reversalInfo);
+        } else {
+          alert(`Payment ${action.toLowerCase()}d successfully!`);
+        }
       } else {
         alert(`Error: ${result.error.message}`);
       }
@@ -105,6 +166,45 @@ export default function AMLScreeningPage() {
       alert('Error processing payment');
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const getSeverityString = (severity: string | number) => {
+    if (typeof severity === 'number') {
+      // Convert integer severity to string
+      if (severity >= 8) return 'CRITICAL';
+      else if (severity >= 6) return 'HIGH';
+      else if (severity >= 4) return 'MEDIUM';
+      else return 'LOW';
+    } else if (typeof severity === 'string') {
+      return severity.toUpperCase();
+    } else {
+      return 'LOW'; // default fallback
+    }
+  };
+
+  const getSeverityColor = (severity: string | number) => {
+    // Handle both integer and string severity values
+    let severityString = '';
+    
+    if (typeof severity === 'number') {
+      // Convert integer severity to string
+      if (severity >= 8) severityString = 'CRITICAL';
+      else if (severity >= 6) severityString = 'HIGH';
+      else if (severity >= 4) severityString = 'MEDIUM';
+      else severityString = 'LOW';
+    } else if (typeof severity === 'string') {
+      severityString = severity;
+    } else {
+      severityString = 'LOW'; // default fallback
+    }
+    
+    switch (severityString?.toUpperCase()) {
+      case 'CRITICAL': return 'text-red-600 bg-red-100';
+      case 'HIGH': return 'text-orange-600 bg-orange-100';
+      case 'MEDIUM': return 'text-yellow-600 bg-yellow-100';
+      case 'LOW': return 'text-blue-600 bg-blue-100';
+      default: return 'text-gray-600 bg-gray-100';
     }
   };
 
@@ -117,11 +217,12 @@ export default function AMLScreeningPage() {
     }
   };
 
-  const formatCurrency = (amount: number, currency: string) => {
+  const formatCurrency = (amount: number | string, currency: string) => {
+    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency,
-    }).format(amount);
+    }).format(numAmount);
   };
 
   if (loading) {
@@ -140,7 +241,45 @@ export default function AMLScreeningPage() {
         {/* Header */}
         <div className="bg-white p-6 rounded-lg shadow">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">AML/CFT Screening</h1>
-          <p className="text-gray-600">Review and approve incoming payments</p>
+          <p className="text-gray-600">Review and approve incoming payments, monitor blocked transactions</p>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+              <button
+                onClick={() => setActiveTab('pending')}
+                className={`py-4 px-6 border-b-2 font-medium text-sm ${
+                  activeTab === 'pending'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                🔍 Pending Payments ({pendingPayments.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('blocked')}
+                className={`py-4 px-6 border-b-2 font-medium text-sm ${
+                  activeTab === 'blocked'
+                    ? 'border-red-500 text-red-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                🚫 Blocked Payments ({blockedPayments.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('blocklist')}
+                className={`py-4 px-6 border-b-2 font-medium text-sm ${
+                  activeTab === 'blocklist'
+                    ? 'border-orange-500 text-orange-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                📋 Block List ({blockList.length})
+              </button>
+            </nav>
+          </div>
         </div>
 
         {/* Statistics */}
@@ -169,118 +308,138 @@ export default function AMLScreeningPage() {
           </div>
         )}
 
-        {/* Filters */}
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="flex space-x-4">
-            <label className="text-sm font-medium text-gray-700">Risk Level:</label>
-            <select
-              value={riskFilter}
-              onChange={(e) => setRiskFilter(e.target.value)}
-              className="border border-gray-300 rounded px-3 py-1 text-sm"
-            >
-              <option value="ALL">All</option>
-              <option value="LOW">Low Risk</option>
-              <option value="MEDIUM">Medium Risk</option>
-              <option value="HIGH">High Risk</option>
-            </select>
+        {/* Filters - Only show for pending payments */}
+        {activeTab === 'pending' && (
+          <div className="bg-white p-4 rounded-lg shadow">
+            <div className="flex space-x-4">
+              <label className="text-sm font-medium text-gray-700">Risk Level:</label>
+              <select
+                value={riskFilter}
+                onChange={(e) => setRiskFilter(e.target.value)}
+                className="border border-gray-300 rounded px-3 py-1 text-sm"
+              >
+                <option value="ALL">All</option>
+                <option value="LOW">Low Risk</option>
+                <option value="MEDIUM">Medium Risk</option>
+                <option value="HIGH">High Risk</option>
+              </select>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Pending Payments Table */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Pending Payments</h2>
-          </div>
-          
-          {pendingPayments.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              No pending payments found.
+        {/* Content based on active tab */}
+        {activeTab === 'pending' && (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Pending Payments</h2>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Account
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Incoming Remittance
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Amount
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Risk Score
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Payment Source
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Received
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {pendingPayments.map((payment) => (
-                    <tr key={payment.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{payment.accountName}</div>
-                        <div className="text-sm text-gray-500">{payment.accountEmail}</div>
-                        <div className="text-sm text-gray-500">{payment.accountIban}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {payment.originalAmount && payment.originalCurrency ? (
-                          <div className="text-sm font-medium text-blue-600">
-                            {formatCurrency(payment.originalAmount, payment.originalCurrency)}
-                          </div>
-                        ) : (
-                          <div className="text-sm text-gray-400">
-                            N/A
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {formatCurrency(payment.amount, payment.currency)}
-                        </div>
-                        {payment.autoApprovalEligible && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            Auto Eligible
-                          </span>
-                        )}
-                      </td>
-                      
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRiskColor(payment.riskLevel)}`}>
-                          {payment.riskLevel} ({payment.riskScore})
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900">{payment.paymentSource}</div>
-                        <div className="text-sm text-gray-500">{payment.paymentReference}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(payment.createdAt).toLocaleString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <button
-                          onClick={() => setSelectedPayment(payment)}
-                          className="text-indigo-600 hover:text-indigo-900 mr-4"
-                        >
-                          Review
-                        </button>
-                      </td>
+            
+            {pendingPayments.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                No pending payments found.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Account
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Incoming Remittance
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Amount
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Risk Score
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Payment Source
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Received
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {pendingPayments.map((payment) => (
+                      <tr key={payment.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{payment.accountName}</div>
+                          <div className="text-sm text-gray-500">{payment.accountEmail}</div>
+                          <div className="text-sm text-gray-500">{payment.accountIban}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {payment.originalAmount && payment.originalCurrency ? (
+                            <div className="text-sm font-medium text-blue-600">
+                              {formatCurrency(payment.originalAmount, payment.originalCurrency)}
+                            </div>
+                          ) : (
+                            <div className="text-sm text-gray-400">
+                              N/A
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">
+                            {formatCurrency(payment.amount, payment.currency)}
+                          </div>
+                          {payment.autoApprovalEligible && (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              Auto Eligible
+                            </span>
+                          )}
+                        </td>
+                        
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRiskColor(payment.riskLevel)}`}>
+                            {payment.riskLevel} ({payment.riskScore})
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-gray-900">{payment.paymentSource}</div>
+                          <div className="text-sm text-gray-500">{payment.paymentReference}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(payment.createdAt).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
+                            onClick={() => setSelectedPayment(payment)}
+                            className="text-indigo-600 hover:text-indigo-900 mr-4"
+                          >
+                            Review
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'blocked' && (
+          <BlockedPaymentsSection 
+            blockedPayments={blockedPayments}
+            formatCurrency={formatCurrency}
+            getSeverityColor={getSeverityColor}
+          />
+        )}
+
+        {activeTab === 'blocklist' && (
+          <BlockListSection 
+            blockList={blockList}
+            getSeverityColor={getSeverityColor}
+            getSeverityString={getSeverityString}
+          />
+        )}
 
         {/* Payment Review Modal */}
         {selectedPayment && (
@@ -375,7 +534,7 @@ export default function AMLScreeningPage() {
                     className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
                     disabled={processing}
                   >
-                    {processing ? 'Processing...' : 'Reject'}
+                    {processing ? 'Processing...' : 'Reject & Reverse'}
                   </button>
                   <button
                     onClick={() => handlePaymentAction(selectedPayment.id, 'APPROVE')}
@@ -391,5 +550,207 @@ export default function AMLScreeningPage() {
         )}
       </div>
     </SidebarLayout>
+  );
+}
+
+// Component for Blocked Payments Section
+function BlockedPaymentsSection({ 
+  blockedPayments, 
+  formatCurrency, 
+  getSeverityColor 
+}: {
+  blockedPayments: BlockedPayment[];
+  formatCurrency: (amount: number | string, currency: string) => string;
+  getSeverityColor: (severity: string | number) => string;
+}) {
+  return (
+    <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-200 bg-red-50">
+        <h2 className="text-lg font-semibold text-red-900">🚫 AIML Blocked Payments</h2>
+        <p className="text-sm text-red-700">Payments automatically blocked by fraud detection</p>
+      </div>
+      
+      {blockedPayments.length === 0 ? (
+        <div className="p-8 text-center text-gray-500">
+          <div className="text-green-600 mb-2">✅ No blocked payments</div>
+          <div className="text-sm">All payments have passed fraud screening</div>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Webhook ID
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Account ID
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Amount
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Blocked Reason
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Severity
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Blocked At
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {blockedPayments.map((payment) => (
+                <tr key={payment.id} className="hover:bg-red-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">{payment.webhook_id}</div>
+                    <div className="text-sm text-gray-500">ID: {payment.id}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-red-900">Account: {payment.account_id}</div>
+                    {payment.blocked_entity_name && (
+                      <div className="text-sm text-red-600">Matched: {payment.blocked_entity_name}</div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">
+                      {formatCurrency(payment.amount, payment.currency)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-red-900 font-medium">{payment.blocked_reason}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {payment.severity && (
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getSeverityColor(payment.severity)}`}>
+                        {typeof payment.severity === 'number' 
+                          ? (payment.severity >= 10 ? 'CRITICAL' : payment.severity >= 7 ? 'HIGH' : payment.severity >= 4 ? 'MEDIUM' : 'LOW')
+                          : payment.severity}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(payment.blocked_at).toLocaleString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                      {payment.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Component for Block List Section
+function BlockListSection({ 
+  blockList, 
+  getSeverityColor,
+  getSeverityString
+}: {
+  blockList: BlockListEntry[];
+  getSeverityColor: (severity: string | number) => string;
+  getSeverityString: (severity: string | number) => string;
+}) {
+  const getTypeIcon = (type: string) => {
+    switch (type?.toUpperCase()) {
+      case 'INDIVIDUAL': return '👤';
+      case 'ENTITY': return '🏢';
+      case 'ORGANIZATION': return '🌐';
+      default: return '❓';
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-200 bg-orange-50">
+        <h2 className="text-lg font-semibold text-orange-900">📋 Fraud Block List</h2>
+        <p className="text-sm text-orange-700">Entities monitored for fraud prevention</p>
+      </div>
+      
+      {blockList.length === 0 ? (
+        <div className="p-8 text-center text-gray-500">
+          No block list entries found.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  ID
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Name
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Type
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Severity
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Reason
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Added
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {blockList.map((entry) => (
+                <tr key={entry.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {entry.id}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <span className="text-lg mr-2">{getTypeIcon(entry.type)}</span>
+                      <div className="text-sm font-medium text-gray-900">{entry.name}</div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                      {entry.type}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getSeverityColor(entry.severity)}`}>
+                      {getSeverityString(entry.severity)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-900">{entry.reason}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <div>{new Date(entry.created_at).toLocaleDateString()}</div>
+                    <div className="text-xs">by {entry.added_by}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      entry.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>
+                      {entry.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }

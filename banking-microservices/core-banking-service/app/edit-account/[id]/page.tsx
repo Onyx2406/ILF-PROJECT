@@ -14,6 +14,8 @@ interface Account {
   wallet_address_id?: string;
   wallet_address_url?: string;
   wallet_public_name?: string;
+  wallet_id?: string;
+  wallet_address?: string;
   asset_id?: string;
 }
 
@@ -131,14 +133,35 @@ export default function EditAccountPage({ params }: { params: Promise<{ id: stri
           {/* Account Info Card */}
           {account && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
-                  {account.name.charAt(0).toUpperCase()}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                    {account.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-blue-900">Editing Account</h3>
+                    <p className="text-blue-700">IBAN: {account.iban}</p>
+                    <p className="text-sm text-blue-600">Account ID: {account.id}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-blue-900">Editing Account</h3>
-                  <p className="text-blue-700">IBAN: {account.iban}</p>
-                  <p className="text-sm text-blue-600">Account ID: {account.id}</p>
+                
+                {/* Wallet Status */}
+                <div className="text-right">
+                  {account.wallet_address ? (
+                    <div className="inline-flex items-center px-3 py-1 bg-green-100 border border-green-200 rounded-full">
+                      <svg className="w-4 h-4 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                      </svg>
+                      <span className="text-sm font-medium text-green-800">Wallet Connected</span>
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center px-3 py-1 bg-gray-100 border border-gray-200 rounded-full">
+                      <svg className="w-4 h-4 text-gray-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      <span className="text-sm font-medium text-gray-600">No Wallet</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -197,6 +220,27 @@ export default function EditAccountPage({ params }: { params: Promise<{ id: stri
                     <option value="active">Active - Account is operational</option>
                     <option value="inactive">Inactive - Account is temporarily disabled</option>
                   </select>
+                  
+                  {/* Wallet Status Info */}
+                  {account?.wallet_address && (
+                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center text-blue-800">
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div className="text-sm">
+                          <div className="font-medium">Wallet Address Connected</div>
+                          <div className="text-blue-600 mt-1">
+                            Changing account status will automatically update the connected wallet address status in Rafiki.
+                          </div>
+                          <div className="text-xs text-blue-600 mt-1">
+                            • Active account → Active wallet address
+                            • Inactive account → Inactive wallet address
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* IBAN (Read-only) */}
@@ -237,6 +281,9 @@ export default function EditAccountPage({ params }: { params: Promise<{ id: stri
                         <li>• Email address must be unique across all accounts</li>
                         <li>• Inactive accounts cannot perform transactions</li>
                         <li>• Account balance and IBAN remain unchanged</li>
+                        {account?.wallet_address && (
+                          <li>• <strong>Wallet status will be synchronized with account status</strong></li>
+                        )}
                       </ul>
                     </div>
                   </div>

@@ -8,7 +8,7 @@ const RAFIKI_CONFIG = {
   backendApiSignatureSecret: 'iyIgCprjb9uL8wFckR+pLEkJWMB7FJhgkvqhTQR/964=',
   backendApiSignatureVersion: '1',
   senderTenantId: 'cf5fd7d3-1eb1-4041-8e43-ba45747e9e5d',
-  assetId: 'b64f99cd-8b61-4c7f-9d73-cdd087e3d0ae',
+  assetId: '7b101b93-379f-4e56-bb3e-4e94ebcadf45',
   baseWalletUrl: 'https://abl-backend'
 };
 

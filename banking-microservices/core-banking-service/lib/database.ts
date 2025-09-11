@@ -159,7 +159,7 @@ async function createTables(db: Pool): Promise<void> {
     // Create webhooks table for persistent storage
     await db.query(`
       CREATE TABLE IF NOT EXISTS webhooks (
-        id SERIAL PRIMARY KEY,
+        id VARCHAR(255) PRIMARY KEY,
         webhook_type VARCHAR(100) NOT NULL,
         status VARCHAR(20) DEFAULT 'received',
         data JSONB NOT NULL,
@@ -205,6 +205,61 @@ async function createTables(db: Pool): Promise<void> {
     `);
     console.log('✅ Pending payments table created');
 
+    // Create block_list table for sanctioned/blocked entities
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS block_list (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        alias VARCHAR(255),
+        reason VARCHAR(500),
+        category VARCHAR(100) DEFAULT 'SANCTIONS', -- SANCTIONS, TERRORIST, PEP, etc.
+        source VARCHAR(100) DEFAULT 'MANUAL', -- OFAC, UN, EU, MANUAL, etc.
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_by VARCHAR(255) DEFAULT 'SYSTEM'
+      )
+    `);
+    console.log('✅ Block list table created');
+
+    // Insert default blocked entities
+    await db.query(`
+      INSERT INTO block_list (name, reason, category, source) 
+      VALUES 
+        ('Usama Bin Laden', 'Terrorist leader - Al-Qaeda', 'TERRORIST', 'OFAC'),
+        ('Osama Bin Laden', 'Terrorist leader - Al-Qaeda (alternate spelling)', 'TERRORIST', 'OFAC'),
+        ('Al-Qaeda', 'Terrorist organization', 'TERRORIST', 'UN'),
+        ('Taliban', 'Sanctioned organization', 'SANCTIONS', 'UN'),
+        ('ISIS', 'Terrorist organization', 'TERRORIST', 'UN'),
+        ('ISIL', 'Terrorist organization (alternate name)', 'TERRORIST', 'UN'),
+        ('Daesh', 'Terrorist organization (alternate name)', 'TERRORIST', 'UN')
+      ON CONFLICT DO NOTHING
+    `);
+    console.log('✅ Default block list entries inserted');
+
+    // Create blocked_payments table for audit trail
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS blocked_payments (
+        id SERIAL PRIMARY KEY,
+        webhook_id VARCHAR(255) REFERENCES webhooks(id),
+        account_id INTEGER REFERENCES accounts(id),
+        blocked_entity_id INTEGER REFERENCES block_list(id),
+        sender_name VARCHAR(255) NOT NULL,
+        amount DECIMAL(15,2) NOT NULL,
+        currency VARCHAR(3) NOT NULL,
+        payment_reference VARCHAR(255),
+        block_reason TEXT,
+        matched_term VARCHAR(255), -- The specific term that triggered the block
+        similarity_score DECIMAL(5,2), -- How closely the name matched (0.00-1.00)
+        blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        reviewed_by VARCHAR(255),
+        reviewed_at TIMESTAMP,
+        review_status VARCHAR(20) DEFAULT 'PENDING', -- PENDING, CONFIRMED, FALSE_POSITIVE
+        review_notes TEXT
+      )
+    `);
+    console.log('✅ Blocked payments table created');
+
     // Create indexes for better performance
     try {
       await db.query(`
@@ -221,6 +276,10 @@ async function createTables(db: Pool): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_pending_payments_account_id ON pending_payments(account_id);
         CREATE INDEX IF NOT EXISTS idx_pending_payments_risk_score ON pending_payments(risk_score);
         CREATE INDEX IF NOT EXISTS idx_pending_payments_created_at ON pending_payments(created_at);
+        CREATE INDEX IF NOT EXISTS idx_block_list_name ON block_list(LOWER(name));
+        CREATE INDEX IF NOT EXISTS idx_block_list_active ON block_list(is_active);
+        CREATE INDEX IF NOT EXISTS idx_blocked_payments_sender ON blocked_payments(LOWER(sender_name));
+        CREATE INDEX IF NOT EXISTS idx_blocked_payments_status ON blocked_payments(review_status);
       `);
       
       // Create wallet-related indexes separately (these columns might not exist in old schemas)
@@ -278,4 +337,72 @@ export function generateIBAN(): string {
   const checkDigits = (BigInt(98) - remainder).toString().padStart(2, '0');
   
   return `${countryCode}${checkDigits}${bankCode}${branchCode}${accountNumber}`;
+}
+
+// Block list checking utilities
+export async function checkBlockList(senderName: string): Promise<{
+  isBlocked: boolean;
+  matchedEntity?: any;
+  similarityScore?: number;
+  blockReason?: string;
+}> {
+  if (!senderName || typeof senderName !== 'string') {
+    return { isBlocked: false };
+  }
+
+  const db = getDatabase();
+  
+  try {
+    // Check for exact matches first (case insensitive)
+    const exactMatch = await db.query(
+      `SELECT * FROM block_list 
+       WHERE (LOWER(name) = LOWER($1) OR LOWER(alias) = LOWER($1))
+       AND is_active = TRUE`,
+      [senderName.trim()]
+    );
+
+    if (exactMatch.rows.length > 0) {
+      const entity = exactMatch.rows[0];
+      return {
+        isBlocked: true,
+        matchedEntity: entity,
+        similarityScore: 1.0,
+        blockReason: `Exact match with blocked entity: ${entity.name} (${entity.reason})`
+      };
+    }
+
+    // Check for partial matches using ILIKE (case insensitive pattern matching)
+    const partialMatch = await db.query(
+      `SELECT *, 
+         CASE 
+           WHEN LOWER(name) ILIKE LOWER($1) THEN 0.9
+           WHEN LOWER($1) ILIKE '%' || LOWER(name) || '%' THEN 0.8
+           WHEN LOWER(name) ILIKE '%' || LOWER($1) || '%' THEN 0.7
+           ELSE 0.0
+         END as similarity_score
+       FROM block_list 
+       WHERE (LOWER(name) ILIKE '%' || LOWER($1) || '%' OR LOWER($1) ILIKE '%' || LOWER(name) || '%')
+       AND is_active = TRUE
+       ORDER BY similarity_score DESC
+       LIMIT 1`,
+      [senderName.trim()]
+    );
+
+    if (partialMatch.rows.length > 0 && partialMatch.rows[0].similarity_score >= 0.7) {
+      const entity = partialMatch.rows[0];
+      return {
+        isBlocked: true,
+        matchedEntity: entity,
+        similarityScore: parseFloat(entity.similarity_score),
+        blockReason: `Partial match with blocked entity: ${entity.name} (${entity.reason})`
+      };
+    }
+
+    return { isBlocked: false };
+
+  } catch (error) {
+    console.error('Error checking block list:', error);
+    // In case of error, err on the side of caution but don't block
+    return { isBlocked: false };
+  }
 }

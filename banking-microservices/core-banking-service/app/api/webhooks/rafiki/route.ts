@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/database';
 import { ensureDatabaseInitialized } from '@/lib/init';
 import { convertUSDtoPKR, needsCurrencyConversion, formatCurrencyAmount, calculateConversionRisk } from '@/lib/currency';
+import { AIMLBlockService } from '@/lib/aiml-block-service';
 
 interface RafikiWebhookData {
   id: string;
@@ -91,11 +92,12 @@ export async function POST(request: NextRequest) {
     // Store webhook in database
     const insertResult = await db.query(
       `INSERT INTO webhooks (
-        webhook_type, status, data, wallet_address_id, account_id,
+        id, webhook_type, status, data, wallet_address_id, account_id,
         forwarded_by, forwarded_at, original_source,
         payment_amount, payment_currency, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW()) RETURNING id`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()) RETURNING id`,
       [
+        data.id, // Use the webhook ID from the request
         data.type,
         'received',
         JSON.stringify(data.data),
@@ -406,6 +408,7 @@ async function processWebhook(webhook: RafikiWebhookData, accountId: number | nu
 
 /**
  * Credit book balance and create pending payment for AML screening with currency conversion
+ * Enhanced with AIML fraud detection
  */
 async function creditBookBalanceAndCreatePendingPayment(accountId: number, amount: number, currency: string, webhook: RafikiWebhookData, db: any) {
   try {
@@ -426,6 +429,57 @@ async function creditBookBalanceAndCreatePendingPayment(accountId: number, amoun
     const accountCurrency = account.currency;
     
     console.log(`💰 Processing payment: ${formatCurrencyAmount(amount, currency)} → Account ${accountId} (${accountCurrency})`);
+    
+    // === NEW: AIML FRAUD DETECTION === 
+    // Extract receiver name for fraud checking
+    const receiverName = extractReceiverName(webhook.data, account);
+    let isPaymentBlocked = false;
+    let blockReason = '';
+    
+    if (receiverName) {
+      try {
+        const aimlService = new AIMLBlockService(db);
+        const blockCheck = await aimlService.checkPaymentAgainstBlockList(receiverName, webhook.data);
+        
+        if (blockCheck.isBlocked) {
+          console.log(`🚫 AIML FRAUD DETECTION: Payment blocked for ${receiverName}`);
+          
+          // Rollback the current transaction first to prevent payment processing
+          await db.query('ROLLBACK');
+          
+          // Record the blocked payment in a separate transaction (outside of payment processing)
+          try {
+            await aimlService.recordBlockedPayment(
+              webhook.data.id,
+              receiverName,
+              amount,
+              currency,
+              blockCheck.reason || 'Unknown fraud match',
+              blockCheck.matchedEntry?.id,
+              { matchedTerm: blockCheck.matchedEntry?.name, accountId: accountId },
+              webhook,
+              accountId // Pass account ID for the new schema
+            );
+          } catch (recordError: any) {
+            console.error('⚠️ Failed to record blocked payment (payment still blocked):', recordError.message);
+          }
+          
+          isPaymentBlocked = true;
+          blockReason = blockCheck.reason || 'Fraud detection match';
+          
+          console.log(`❌ Payment ${webhook.data.id} blocked and NOT processed due to fraud detection`);
+          return;
+        } else {
+          console.log(`✅ AIML: Payment cleared for ${receiverName} - no fraud matches`);
+        }
+      } catch (aimlError: any) {
+        console.error('⚠️ AIML fraud detection error (allowing payment to continue):', aimlError.message);
+        // Continue with normal processing if AIML fails
+      }
+    } else {
+      console.log('⚠️ AIML: No receiver name found for fraud checking');
+    }
+    // === END AIML FRAUD DETECTION ===
     
     // Variables for final amount and currency to credit
     let finalAmount = amount;
@@ -482,7 +536,9 @@ async function creditBookBalanceAndCreatePendingPayment(accountId: number, amoun
           walletAddressId: webhook.data.walletAddressId,
           client: webhook.data.client,
           metadata: webhook.data.metadata,
-          conversion: conversionDetails
+          conversion: conversionDetails,
+          aimlChecked: true,
+          receiverName: receiverName || 'Unknown'
         }),
         riskScore,
         'PENDING',
@@ -509,7 +565,7 @@ async function creditBookBalanceAndCreatePendingPayment(accountId: number, amoun
         conversionDetails ? amount.toFixed(2) : null, // Original amount
         conversionDetails ? currency : null, // Original currency
         conversionDetails ? conversionDetails.exchangeRate : null, // Conversion rate
-        `Incoming payment from Rafiki (Pending AML): ${webhook.data.id}${conversionDetails ? ` - Converted from ${formatCurrencyAmount(amount, currency)} at rate ${conversionDetails.exchangeRate}` : ''}`,
+        `Incoming payment from Rafiki (Pending AML): ${webhook.data.id}${conversionDetails ? ` - Converted from ${formatCurrencyAmount(amount, currency)} at rate ${conversionDetails.exchangeRate}` : ''}${receiverName ? ` | Receiver: ${receiverName}` : ''}`,
         transactionRef,
         'PENDING'
       ]
@@ -554,4 +610,72 @@ function calculateRiskScore(paymentData: any): number {
   }
   
   return Math.min(riskScore, 100); // Cap at 100
+}
+
+/**
+ * Extract names for AIML fraud detection (both sender and receiver)
+ */
+function extractReceiverName(paymentData: any, account?: any): string | null {
+  // PRIORITY 1: Explicit sender names (most likely to contain suspicious entities)
+  const senderNames = [
+    paymentData.metadata?.senderName,
+    paymentData.metadata?.Name, // Capital N as used in demo sender
+    paymentData.senderName,
+    paymentData.sender?.name
+  ];
+  
+  for (const name of senderNames) {
+    if (name && typeof name === 'string' && name.trim().length > 0) {
+      const cleanName = name.trim();
+      if (cleanName.length > 2 && !cleanName.includes('http') && !cleanName.toLowerCase().includes('payment')) {
+        console.log(`🔍 AIML: Found sender name for fraud check: ${cleanName}`);
+        return cleanName;
+      }
+    }
+  }
+  
+  // PRIORITY 2: Explicit receiver names  
+  const receiverNames = [
+    paymentData.receiverName,
+    paymentData.receiver?.name,
+    paymentData.metadata?.receiverName,
+    account?.name,
+    account?.customer?.name
+  ];
+  
+  for (const name of receiverNames) {
+    if (name && typeof name === 'string' && name.trim().length > 0) {
+      const cleanName = name.trim();
+      if (cleanName.length > 2 && !cleanName.includes('http') && !cleanName.toLowerCase().includes('payment')) {
+        console.log(`🔍 AIML: Found receiver name for fraud check: ${cleanName}`);
+        return cleanName;
+      }
+    }
+  }
+  
+  // PRIORITY 3: Description fields (only if they look like names, not generic descriptions)
+  const descriptions = [
+    paymentData.metadata?.description,
+    paymentData.description
+  ];
+  
+  for (const desc of descriptions) {
+    if (desc && typeof desc === 'string' && desc.trim().length > 0) {
+      const cleanDesc = desc.trim();
+      // Only use description if it looks like a name (contains spaces, proper capitalization, not too long)
+      if (cleanDesc.length > 5 && cleanDesc.length < 50 && 
+          !cleanDesc.includes('http') && 
+          !cleanDesc.toLowerCase().includes('payment') &&
+          !cleanDesc.toLowerCase().includes('transfer') &&
+          !cleanDesc.toLowerCase().includes('bank') &&
+          cleanDesc.split(' ').length >= 2 &&
+          cleanDesc.split(' ').length <= 4) {
+        console.log(`🔍 AIML: Found potential name in description for fraud check: ${cleanDesc}`);
+        return cleanDesc;
+      }
+    }
+  }
+  
+  console.log('⚠️ AIML: No suitable name found for fraud checking');
+  return null;
 }

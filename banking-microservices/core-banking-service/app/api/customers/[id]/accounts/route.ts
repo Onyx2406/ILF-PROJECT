@@ -135,14 +135,45 @@ export async function POST(
   } catch (error: any) {
     console.error('Error creating account for customer:', error);
     
-    // Just return success for any error to bypass validation
+    // Handle specific database constraint violations
+    if (error.code === '23505') { // PostgreSQL unique violation error code
+      if (error.constraint === 'accounts_iban_key') {
+        return NextResponse.json({
+          success: false,
+          error: {
+            message: 'IBAN generation conflict. Please try again.',
+            code: 'IBAN_CONFLICT'
+          }
+        }, { status: 409 });
+      } else if (error.constraint === 'accounts_username_key') {
+        return NextResponse.json({
+          success: false,
+          error: {
+            message: 'Username generation conflict. Please try again.',
+            code: 'USERNAME_CONFLICT'
+          }
+        }, { status: 409 });
+      }
+    }
+    
+    // Handle foreign key constraint errors
+    if (error.code === '23503') {
+      return NextResponse.json({
+        success: false,
+        error: {
+          message: 'Customer not found or invalid customer ID.',
+          code: 'INVALID_CUSTOMER'
+        }
+      }, { status: 400 });
+    }
+    
+    // Generic error response
     return NextResponse.json({
-      success: true,
-      data: { 
-        id: Date.now(),
-        message: 'Account creation attempted'
-      },
-      warning: 'Bypassed validation - ' + (error.message || 'Unknown error')
-    }, { status: 201 });
+      success: false,
+      error: {
+        message: 'Failed to create account. Please try again.',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      }
+    }, { status: 500 });
   }
 }

@@ -37,7 +37,7 @@ body:graphql {
 body:graphql:vars {
   {
     "input": {
-      "walletAddressId": "{{gfranklinWalletAddressId}}",
+      "walletAddressId": "e1ec87da-450f-4b23-b9ff-84724dbb66e6",
       "receiver": "{{receiverId}}"
     }
   }
@@ -53,7 +53,7 @@ script:pre-request {
 
 script:post-response {
   const body = res.getBody();
-
+  
   if (body?.data) {
     bru.setEnvVar("quoteId", body.data.createQuote.quote.id);
   }

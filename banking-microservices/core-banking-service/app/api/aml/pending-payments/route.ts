@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/database';
 import { ensureDatabaseInitialized } from '@/lib/init';
+import { createReversalPayment } from '@/lib/rafiki';
 
 // GET - Retrieve pending payments for AML screening
 export async function GET(request: NextRequest) {
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
         w.data as webhook_data
       FROM pending_payments pp
       JOIN accounts a ON pp.account_id = a.id
-      LEFT JOIN webhooks w ON pp.webhook_id = w.id::text
+      LEFT JOIN webhooks w ON pp.webhook_id = w.id
       WHERE pp.status = $1
     `;
     
@@ -164,6 +165,10 @@ export async function POST(request: NextRequest) {
       
       const payment = paymentResult.rows[0];
       
+      // Declare variables for reversal tracking (needed in response)
+      let reversalResult: any = null;
+      let senderWalletAddress: string | null = null;
+      
       if (action === 'APPROVE') {
         // Move amount from book balance to available balance
         await db.query(
@@ -189,25 +194,174 @@ export async function POST(request: NextRequest) {
         console.log(`✅ AML: Payment ${paymentId} approved - Amount moved to available balance, transaction marked as COMPLETED`);
         
       } else if (action === 'REJECT') {
-        // Reverse the book balance credit
+        console.log(`🚨 Processing AML pending payment rejection with complete reversal flow...`);
+        console.log(`📋 Payment ID: ${paymentId}, Amount: ${payment.amount}, Currency: ${payment.currency}`);
+        
+        // Get webhook data to extract sender information
+        let webhookData = null;
+        
+        if (payment.webhook_id) {
+          const webhookResult = await db.query(`
+            SELECT * FROM webhooks 
+            WHERE id = $1
+          `, [payment.webhook_id]);
+
+          if (webhookResult.rows.length > 0) {
+            const webhook = webhookResult.rows[0];
+            webhookData = webhook.data;
+            
+            // Try multiple ways to extract sender wallet address
+            if (webhookData?.metadata?.senderWalletAddress) {
+              senderWalletAddress = webhookData.metadata.senderWalletAddress;
+              console.log('📋 Found sender wallet address in metadata:', senderWalletAddress);
+            } else if (webhookData?.walletAddressId) {
+              // Try to find the wallet address by wallet_id
+              console.log('🔍 Looking up sender wallet address via walletAddressId:', webhookData.walletAddressId);
+              const senderAccountResult = await db.query(
+                'SELECT wallet_address FROM accounts WHERE wallet_id = $1',
+                [webhookData.walletAddressId]
+              );
+              
+              if (senderAccountResult.rows.length > 0) {
+                senderWalletAddress = senderAccountResult.rows[0].wallet_address;
+                console.log('✅ Found sender wallet address via wallet_id lookup:', senderWalletAddress);
+              } else {
+                console.log('⚠️ No account found for wallet_id:', webhookData.walletAddressId);
+              }
+            } else {
+              console.log('⚠️ No sender wallet address in webhook metadata');
+              console.log('📋 Available webhook data fields:', Object.keys(webhookData || {}));
+            }
+          }
+        }
+
+        // STEP 1: Credit the payment to receiver's account first (simulate payment arriving)
+        console.log('💰 Step 1: Crediting payment to receiver account...');
+        
+        // Get current account balance first
+        const accountBeforeCredit = await db.query(
+          'SELECT available_balance FROM accounts WHERE id = $1',
+          [payment.account_id]
+        );
+        const balanceBeforeCredit = parseFloat(accountBeforeCredit.rows[0].available_balance || '0');
+        const balanceAfterCredit = balanceBeforeCredit + parseFloat(payment.amount);
+        
         await db.query(
           `UPDATE accounts 
-           SET book_balance = book_balance - $1,
+           SET available_balance = available_balance + $1,
+               book_balance = book_balance + $1,
+               balance = available_balance + $1,
                updated_at = NOW()
            WHERE id = $2`,
           [payment.amount, payment.account_id]
         );
         
-        // Update transaction status to rejected
+        // Create transaction record for the credit
+        await db.query(
+          `INSERT INTO transactions (
+            account_id, amount, currency, transaction_type, status, 
+            description, reference_number, balance_after, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+          [
+            payment.account_id,
+            payment.amount,
+            payment.currency,
+            'CREDIT',
+            'COMPLETED',
+            `Pending payment credited (webhook ${payment.webhook_id}) - To be reversed due to AML rejection`,
+            `CREDIT-PENDING-${payment.webhook_id}`,
+            balanceAfterCredit
+          ]
+        );
+
+        console.log('✅ Payment credited to receiver account');
+
+        // STEP 2: Immediately debit the same amount (preparing for reversal)
+        console.log('💰 Step 2: Immediately debiting from receiver account for reversal...');
+        
+        const balanceAfterDebit = balanceAfterCredit - parseFloat(payment.amount);
+        
+        await db.query(
+          `UPDATE accounts 
+           SET available_balance = available_balance - $1,
+               book_balance = book_balance - $1,
+               balance = available_balance - $1,
+               updated_at = NOW()
+           WHERE id = $2`,
+          [payment.amount, payment.account_id]
+        );
+        
+        // Create transaction record for the debit
+        await db.query(
+          `INSERT INTO transactions (
+            account_id, amount, currency, transaction_type, status, 
+            description, reference_number, balance_after, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+          [
+            payment.account_id,
+            payment.amount,
+            payment.currency,
+            'DEBIT',
+            'COMPLETED',
+            `AML Rejection - Debiting for reversal to sender`,
+            `DEBIT-REVERSAL-PENDING-${payment.webhook_id}`,
+            balanceAfterDebit
+          ]
+        );
+
+        console.log('✅ Amount debited from receiver account for reversal');
+
+        // Update the original PENDING transaction to REJECTED status  
         await db.query(
           `UPDATE transactions 
-           SET status = 'REJECTED', description = description || ' - REJECTED'
+           SET status = 'REJECTED', 
+               description = description || ' - REJECTED via AML screening'
            WHERE reference_number LIKE $1 
            AND account_id = $2 AND status = 'PENDING'`,
           [`%${String(payment.webhook_id).slice(-8)}%`, payment.account_id]
         );
+
+        // STEP 3: Create reversal payment back to sender using Rafiki (if we have sender info)
         
-        console.log(`❌ AML: Payment ${paymentId} rejected - Book balance reversed`);
+        if (senderWalletAddress) {
+          try {
+            console.log('💸 Step 3: Creating reversal payment to sender via Rafiki...');
+            
+            reversalResult = await createReversalPayment(
+              senderWalletAddress,
+              payment.amount.toString(),
+              payment.currency,
+              payment.webhook_id.toString(),
+              `AML Pending Payment Rejection Reversal: ${screeningNotes || 'AML screening rejection'}`,
+              db,
+              webhookData
+            );
+
+            console.log('✅ Reversal payment created successfully:', reversalResult.payment.id);
+
+          } catch (reversalError: any) {
+            console.error('❌ Failed to create Rafiki reversal payment:', reversalError.message);
+            reversalResult = {
+              success: false,
+              error: reversalError.message,
+              payment: null
+            };
+          }
+        } else {
+          console.log('⚠️ No sender wallet address available - cannot create reversal payment');
+          reversalResult = {
+            success: false,
+            error: 'Sender wallet address not available in webhook metadata',
+            payment: null
+          };
+        }
+        
+        console.log(`❌ AML: Pending payment ${paymentId} rejected with complete reversal flow`);
+        console.log('📊 Summary:');
+        console.log('   ✅ Payment credited to receiver');
+        console.log('   ✅ Payment debited from receiver'); 
+        console.log('   ✅ Original transaction marked as rejected');
+        console.log('   ' + (reversalResult?.success ? '✅' : '❌') + ' Reversal payment ' + (reversalResult?.success ? 'sent to sender' : 'failed'));
       }
       
       // Update pending payment status
@@ -221,15 +375,41 @@ export async function POST(request: NextRequest) {
       // Commit transaction
       await db.query('COMMIT');
       
+      // Prepare response based on action
+      let responseMessage = `Payment ${action.toLowerCase()}d successfully`;
+      let responseData: any = {
+        paymentId,
+        action,
+        screeningNotes,
+        processedAt: new Date().toISOString()
+      };
+
+      // Add reversal information for rejected payments
+      if (action === 'REJECT' && reversalResult) {
+        responseMessage = 'Payment rejected with complete reversal flow';
+        responseData.paymentFlow = {
+          step1: 'Payment credited to receiver account',
+          step2: 'Payment immediately debited from receiver account',
+          step3: reversalResult.success 
+            ? 'Reversal payment sent to original sender' 
+            : 'Reversal payment failed - manual intervention required'
+        };
+        responseData.reversal = reversalResult.success ? {
+          status: 'COMPLETED',
+          paymentId: reversalResult.payment.id,
+          amount: payment.amount,
+          currency: payment.currency,
+          recipient: senderWalletAddress
+        } : {
+          status: 'FAILED',
+          error: reversalResult.error || 'No sender information available'
+        };
+      }
+      
       return NextResponse.json({
         success: true,
-        message: `Payment ${action.toLowerCase()}d successfully`,
-        data: {
-          paymentId,
-          action,
-          screeningNotes,
-          processedAt: new Date().toISOString()
-        }
+        message: responseMessage,
+        data: responseData
       }, { status: 200 });
       
     } catch (error) {
