@@ -11,7 +11,6 @@ RUN npm install
 
 # Copy source code
 COPY src/ ./src/
-COPY admin-ui/ ./admin-ui/
 
 # Build the application
 RUN npm run build

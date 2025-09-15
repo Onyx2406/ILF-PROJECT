@@ -39,7 +39,18 @@ const navigation = [
     icon: '💳',
     description: 'ILP Address management'
   },
-  
+  {
+    name: 'Rafiki Webhooks',
+    href: '/webhooks',
+    icon: '🔔',
+    description: 'Webhook monitoring'
+  },
+  {
+    name: 'AML/CFT Screening',
+    href: '/aml',
+    icon: '🛡️',
+    description: 'Payment screening and approval'
+  }
 ];
 
 const stats = [

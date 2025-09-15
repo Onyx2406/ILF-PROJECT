@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/database';
 import { ensureDatabaseInitialized } from '@/lib/init';
+import { updateWalletAddressStatus } from '@/lib/rafiki';
 
 // READ - Get single account
 export async function GET(
@@ -87,6 +88,11 @@ export async function PUT(
     const account_type = body.account_type ?? currentAccount.account_type;
     const status = body.status ?? currentAccount.status;
     
+    // Check if status changed and account has a wallet ID
+    const statusChanged = status !== currentAccount.status;
+    const hasWalletId = currentAccount.wallet_id;
+    
+    // Update account in database
     const result = await db.query(
       `UPDATE accounts 
        SET name = $1, email = $2, currency = $3, balance = $4, 
@@ -95,6 +101,28 @@ export async function PUT(
        RETURNING *`,
       [name, email, currency, balance, account_type, status, id]
     );
+
+    // If status changed and account has wallet ID, update wallet status in Rafiki
+    if (statusChanged && hasWalletId) {
+      try {
+        console.log(`🔄 Account status changed from ${currentAccount.status} to ${status}, updating wallet address...`);
+        
+        // Convert account status to wallet address status
+        const walletStatus = status === 'active' ? 'ACTIVE' : 'INACTIVE';
+        
+        await updateWalletAddressStatus(
+          currentAccount.wallet_id,
+          walletStatus,
+          name // Update public name as well
+        );
+        
+        console.log(`✅ Wallet address status updated to ${walletStatus}`);
+      } catch (walletError) {
+        console.error('❌ Failed to update wallet address status:', walletError);
+        // Log the error but don't fail the account update
+        // The account status was successfully updated in our database
+      }
+    }
 
     return NextResponse.json({ success: true, data: result.rows[0] });
 
@@ -118,6 +146,18 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
     const db = getDatabase();
+    
+    // Get current account data first (for wallet status sync)
+    const currentResult = await db.query('SELECT * FROM accounts WHERE id = $1', [id]);
+    
+    if (currentResult.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, error: { message: 'Account not found' } },
+        { status: 404 }
+      );
+    }
+    
+    const currentAccount = currentResult.rows[0];
     
     // Build dynamic update query based on provided fields
     const updateFields = [];
@@ -156,6 +196,30 @@ export async function PATCH(
         { success: false, error: { message: 'Account not found' } },
         { status: 404 }
       );
+    }
+
+    // Check if status was updated and account has wallet ID
+    const statusChanged = body.status && body.status !== currentAccount.status;
+    const hasWalletId = currentAccount.wallet_id;
+    
+    if (statusChanged && hasWalletId) {
+      try {
+        console.log(`🔄 Account status changed from ${currentAccount.status} to ${body.status}, updating wallet address...`);
+        
+        // Convert account status to wallet address status
+        const walletStatus = body.status === 'active' ? 'ACTIVE' : 'INACTIVE';
+        
+        await updateWalletAddressStatus(
+          currentAccount.wallet_id,
+          walletStatus,
+          body.name || currentAccount.name // Use updated name if provided
+        );
+        
+        console.log(`✅ Wallet address status updated to ${walletStatus}`);
+      } catch (walletError) {
+        console.error('❌ Failed to update wallet address status:', walletError);
+        // Log the error but don't fail the account update
+      }
     }
 
     return NextResponse.json({ success: true, data: result.rows[0] });
@@ -258,12 +322,19 @@ export async function POST(
       }
       
       const account = accountResult.rows[0];
-      const newBalance = parseFloat(account.balance) + parseFloat(amount);
+      const newBalance = parseFloat(account.balance || '0') + parseFloat(amount);
+      const newAvailableBalance = parseFloat(account.available_balance || '0') + parseFloat(amount);
+      const newBookBalance = parseFloat(account.book_balance || '0') + parseFloat(amount);
       
-      // Update account balance
+      // Update account balance - update all balance fields for consistency
       await db.query(
-        'UPDATE accounts SET balance = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        [newBalance, id]
+        `UPDATE accounts 
+         SET balance = $1, 
+             available_balance = $2, 
+             book_balance = $3, 
+             updated_at = CURRENT_TIMESTAMP 
+         WHERE id = $4`,
+        [newBalance, newAvailableBalance, newBookBalance, id]
       );
       
       // Create transaction record
@@ -283,7 +354,7 @@ export async function POST(
           'CREDIT',
           amount,
           account.currency,
-          newBalance,
+          newAvailableBalance, // Use available balance as the primary balance reference
           'Initial balance deposit',
           `INIT-${Date.now()}`,
           'COMPLETED'
@@ -296,7 +367,12 @@ export async function POST(
         success: true,
         message: 'Balance added successfully',
         data: {
-          account: { ...account, balance: newBalance },
+          account: { 
+            ...account, 
+            balance: newBalance.toFixed(2),
+            available_balance: newAvailableBalance.toFixed(2),
+            book_balance: newBookBalance.toFixed(2)
+          },
           transaction: transactionResult.rows[0]
         }
       });

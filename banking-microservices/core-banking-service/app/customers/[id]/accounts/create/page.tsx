@@ -28,9 +28,10 @@ export default function CreateAccountPage() {
   const [ formData, setFormData] = useState<AccountForm>({
     name: '',
     email: '',
-    currency: 'PKR',
+    currency: 'USD', // Default to USD as per requirement
     account_type: 'SAVINGS'
   });
+  const [error, setError] = useState<string>('');
 
   useEffect(() => {
     fetchCustomer();
@@ -46,7 +47,7 @@ export default function CreateAccountPage() {
         setFormData(prev => ({
           ...prev,
           name: data.data.name,
-          email: data.data.email
+          email: data.data.email // Use same email as customer
         }));
       }
     } catch (error) {
@@ -63,6 +64,8 @@ export default function CreateAccountPage() {
     e.preventDefault();
     
     setIsLoading(true);
+    setError(''); // Clear any previous errors
+    
     try {
       const response = await fetch(`/api/customers/${customerId}/accounts`, {
         method: 'POST',
@@ -75,15 +78,17 @@ export default function CreateAccountPage() {
 
       const result = await response.json();
 
-      if (result.success) {
+      if (result.success && result.data && result.data.id) {
         // Redirect to step 2: Add initial balance
         router.push(`/customers/${customerId}/accounts/${result.data.id}/add-balance`);
       } else {
-        alert(result.error?.message || 'Failed to create account');
+        // Handle various error cases
+        const errorMessage = result.error?.message || 'Failed to create account. Please try again.';
+        setError(errorMessage);
       }
     } catch (error) {
       console.error('Error creating account:', error);
-      alert('Failed to create account');
+      setError('Network error. Please check your connection and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -137,6 +142,20 @@ export default function CreateAccountPage() {
           </div>
 
           <div className="bg-white rounded-lg shadow p-8">
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                <div className="flex items-center space-x-2">
+                  <div className="w-5 h-5 text-red-600">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-red-800 font-medium">{error}</p>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
@@ -168,6 +187,9 @@ export default function CreateAccountPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                       required
                     />
+                    <p className="text-xs text-gray-500 mt-1">
+                      💡 This can be the same email as the customer's email address.
+                    </p>
                   </div>
 
                   <div>
@@ -189,7 +211,7 @@ export default function CreateAccountPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Currency
+                      Account Currency
                     </label>
                     <select
                       name="currency"
@@ -197,10 +219,12 @@ export default function CreateAccountPage() {
                       onChange={handleChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                     >
-                      <option value="PKR">PKR - Pakistani Rupee</option>
-                      <option value="USD">USD - US Dollar</option>
-                      <option value="EUR">EUR - Euro</option>
+                      <option value="USD">USD - US Dollar Account (Direct USD payments)</option>
+                      <option value="PKR">PKR - Pakistani Rupee Account (USD payments auto-converted to PKR)</option>
                     </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      💡 All wallet addresses are created in USD. PKR accounts automatically convert USD payments to PKR using live exchange rates.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -216,27 +240,31 @@ export default function CreateAccountPage() {
                     </div>
                   </div>
                   <div>
-                    <h4 className="font-semibold text-blue-900 mb-3">Account Creation Process</h4>
+                    <h4 className="font-semibold text-blue-900 mb-3">💱 Currency & Wallet Information</h4>
                     <ul className="text-sm text-blue-800 space-y-2">
                       <li className="flex items-center space-x-2">
                         <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
-                        <span>Automatic IBAN generation for Pakistan</span>
+                        <span><strong>All wallets created in USD</strong> - Universal payment acceptance</span>
                       </li>
                       <li className="flex items-center space-x-2">
                         <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
-                        <span>Account linked to customer ID: {customer.c_id}</span>
+                        <span><strong>USD Account:</strong> Direct USD payments, no conversion</span>
                       </li>
                       <li className="flex items-center space-x-2">
                         <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
-                        <span>Relationship entry created in database</span>
+                        <span><strong>PKR Account:</strong> USD payments auto-converted to PKR using live rates</span>
                       </li>
                       <li className="flex items-center space-x-2">
                         <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
-                        <span>Account status set to "active"</span>
+                        <span>Automatic IBAN generation for Pakistan banking standards</span>
                       </li>
                       <li className="flex items-center space-x-2">
                         <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
-                        <span>Wallet address creation available via API only</span>
+                        <span>Account linked to customer ID: {customer?.c_id}</span>
+                      </li>
+                      <li className="flex items-center space-x-2">
+                        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
+                        <span>Wallet address creation available after account setup</span>
                       </li>
                     </ul>
                   </div>

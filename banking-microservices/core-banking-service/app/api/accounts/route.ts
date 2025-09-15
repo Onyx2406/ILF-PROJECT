@@ -22,8 +22,9 @@ export async function POST(request: NextRequest) {
     const iban = generateIBAN();
     
     const result = await db.query(
-      'INSERT INTO accounts (name, email, iban, currency) VALUES ($1, $2, $3, $4) RETURNING *',
-      [name, email, iban, 'PKR'] // Default to PKR for Pakistani bank
+      `INSERT INTO accounts (name, email, iban, currency, balance, available_balance, book_balance) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [name, email, iban, 'PKR', '0.00', '0.00', '0.00'] // Initialize all balance fields to 0
     );
 
     return NextResponse.json(
@@ -63,6 +64,8 @@ export async function GET() {
         iban,
         currency,
         balance,
+        available_balance,
+        book_balance,
         status,
         wallet_address,
         wallet_id,

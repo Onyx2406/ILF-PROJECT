@@ -10,7 +10,8 @@ export async function POST(
   try {
     await ensureDatabaseInitialized();
     
-    const accountId = params.id;
+    const resolvedParams = await params;
+    const accountId = resolvedParams.id;
     const body = await request.json();
     const { publicName } = body;
     
@@ -54,7 +55,8 @@ export async function POST(
     }
 
     console.log('🚀 CBS: Creating wallet address for account:', account);
-    console.log('📋 CBS: Requesting OC service to handle Rafiki communication...');
+    console.log('� HOT RELOAD TEST: This message proves hot reload is working!');
+    console.log('�📋 CBS: Requesting OC service to handle Rafiki communication...');
 
     // Step 2: Request OC service to create wallet in Rafiki
     const ocRafikiUrl = 'http://oc-service:3300/api/rafiki/wallet';

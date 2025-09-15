@@ -84,20 +84,45 @@ async function createTables(db: Pool): Promise<void> {
         name VARCHAR(255) NOT NULL,
         email VARCHAR(255) NOT NULL,
         iban VARCHAR(34) UNIQUE NOT NULL,
-        currency VARCHAR(10) DEFAULT 'PKR',
+        currency VARCHAR(3) DEFAULT 'PKR',
         balance DECIMAL(15,2) DEFAULT 0.00,
         account_type VARCHAR(50) DEFAULT 'SAVINGS',
-        status VARCHAR(50) DEFAULT 'active',
-        wallet_address VARCHAR(255) NULL,
-        wallet_id VARCHAR(255) NULL,
-        asset_id VARCHAR(255) NULL,
-        customer_id INTEGER REFERENCES customers(c_id),
+        status VARCHAR(20) DEFAULT 'active',
         username VARCHAR(100) NULL,
         password_hash VARCHAR(255) NULL,
+        wallet_address_id VARCHAR(255) NULL,
+        wallet_address_url VARCHAR(500) NULL,
+        wallet_public_name VARCHAR(255) NULL,
+        asset_id VARCHAR(255) NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        customer_id INTEGER REFERENCES customers(c_id),
+        wallet_address VARCHAR(255) NULL,
+        wallet_id VARCHAR(255) NULL
       );
     `);
+    
+    // Add wallet columns to existing accounts table if they don't exist
+    try {
+      await db.query(`
+        ALTER TABLE accounts 
+        ADD COLUMN IF NOT EXISTS wallet_address VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS wallet_id VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS asset_id VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS wallet_address_id VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS wallet_address_url VARCHAR(500),
+        ADD COLUMN IF NOT EXISTS wallet_public_name VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS customer_id INTEGER REFERENCES customers(c_id);
+      `);
+    } catch (error: any) {
+      // Ignore errors if columns already exist
+      if (!error.message.includes('already exists')) {
+        console.log('⚠️ Note: Some wallet columns may already exist');
+      }
+    }
+    
     console.log('✅ Accounts table created with new schema');
 
     // Create customer_accounts relationship table
@@ -120,7 +145,7 @@ async function createTables(db: Pool): Promise<void> {
         account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
         transaction_type VARCHAR(20) NOT NULL,
         amount DECIMAL(15,2) NOT NULL,
-        currency VARCHAR(10) DEFAULT 'PKR',
+        currency VARCHAR(3) DEFAULT 'PKR',
         balance_after DECIMAL(15,2) NOT NULL,
         description TEXT,
         reference_number VARCHAR(100),
@@ -131,20 +156,143 @@ async function createTables(db: Pool): Promise<void> {
     `);
     console.log('✅ Transactions table created');
 
-    // Create indexes for better performance
+    // Create webhooks table for persistent storage
     await db.query(`
-      CREATE INDEX IF NOT EXISTS idx_accounts_email ON accounts(email);
-      CREATE INDEX IF NOT EXISTS idx_accounts_iban ON accounts(iban);
-      CREATE INDEX IF NOT EXISTS idx_accounts_wallet_address ON accounts(wallet_address);
-      CREATE INDEX IF NOT EXISTS idx_accounts_wallet_id ON accounts(wallet_id);
-      CREATE INDEX IF NOT EXISTS idx_accounts_asset_id ON accounts(asset_id);
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_username ON accounts(username) WHERE username IS NOT NULL;
-      CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
-      CREATE INDEX IF NOT EXISTS idx_customers_cnic ON customers(cnic);
-      CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);
-      CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at);
-      CREATE INDEX IF NOT EXISTS idx_customer_accounts_customer_id ON customer_accounts(customer_id);
+      CREATE TABLE IF NOT EXISTS webhooks (
+        id VARCHAR(255) PRIMARY KEY,
+        webhook_type VARCHAR(100) NOT NULL,
+        status VARCHAR(20) DEFAULT 'received',
+        data JSONB NOT NULL,
+        wallet_address_id VARCHAR(255),
+        account_id INTEGER REFERENCES accounts(id),
+        payment_amount DECIMAL(15,2),
+        payment_currency VARCHAR(3),
+        payment_id VARCHAR(255),
+        forwarded_by VARCHAR(50),
+        forwarded_at TIMESTAMP,
+        original_source VARCHAR(50),
+        processed_at TIMESTAMP,
+        error_message TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
     `);
+    console.log('✅ Webhooks table created');
+
+    // Create pending_payments table for AML/CFT screening
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS pending_payments (
+        id SERIAL PRIMARY KEY,
+        webhook_id VARCHAR(255) REFERENCES webhooks(id),
+        account_id INTEGER NOT NULL REFERENCES accounts(id),
+        amount DECIMAL(15,2) NOT NULL,
+        currency VARCHAR(3) NOT NULL,
+        original_amount DECIMAL(15,2), -- Original amount before conversion
+        original_currency VARCHAR(3), -- Original currency before conversion (USD)
+        conversion_rate DECIMAL(10,6), -- Exchange rate used for conversion
+        payment_reference VARCHAR(255) NOT NULL,
+        payment_source TEXT, -- Description of payment source
+        sender_info JSONB, -- Information about sender
+        risk_score INTEGER DEFAULT 0, -- Risk assessment score (0-100)
+        status VARCHAR(20) DEFAULT 'PENDING', -- PENDING, APPROVED, REJECTED
+        screening_notes TEXT, -- AML officer notes
+        screened_by VARCHAR(255), -- Admin who screened
+        screened_at TIMESTAMP,
+        auto_approval_eligible BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('✅ Pending payments table created');
+
+    // Create block_list table for sanctioned/blocked entities
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS block_list (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        alias VARCHAR(255),
+        reason VARCHAR(500),
+        category VARCHAR(100) DEFAULT 'SANCTIONS', -- SANCTIONS, TERRORIST, PEP, etc.
+        source VARCHAR(100) DEFAULT 'MANUAL', -- OFAC, UN, EU, MANUAL, etc.
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_by VARCHAR(255) DEFAULT 'SYSTEM'
+      )
+    `);
+    console.log('✅ Block list table created');
+
+    // Insert default blocked entities
+    await db.query(`
+      INSERT INTO block_list (name, reason, category, source) 
+      VALUES 
+        ('Usama Bin Laden', 'Terrorist leader - Al-Qaeda', 'TERRORIST', 'OFAC'),
+        ('Osama Bin Laden', 'Terrorist leader - Al-Qaeda (alternate spelling)', 'TERRORIST', 'OFAC'),
+        ('Al-Qaeda', 'Terrorist organization', 'TERRORIST', 'UN'),
+        ('Taliban', 'Sanctioned organization', 'SANCTIONS', 'UN'),
+        ('ISIS', 'Terrorist organization', 'TERRORIST', 'UN'),
+        ('ISIL', 'Terrorist organization (alternate name)', 'TERRORIST', 'UN'),
+        ('Daesh', 'Terrorist organization (alternate name)', 'TERRORIST', 'UN')
+      ON CONFLICT DO NOTHING
+    `);
+    console.log('✅ Default block list entries inserted');
+
+    // Create blocked_payments table for audit trail
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS blocked_payments (
+        id SERIAL PRIMARY KEY,
+        webhook_id VARCHAR(255) REFERENCES webhooks(id),
+        account_id INTEGER REFERENCES accounts(id),
+        blocked_entity_id INTEGER REFERENCES block_list(id),
+        sender_name VARCHAR(255) NOT NULL,
+        amount DECIMAL(15,2) NOT NULL,
+        currency VARCHAR(3) NOT NULL,
+        payment_reference VARCHAR(255),
+        block_reason TEXT,
+        matched_term VARCHAR(255), -- The specific term that triggered the block
+        similarity_score DECIMAL(5,2), -- How closely the name matched (0.00-1.00)
+        blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        reviewed_by VARCHAR(255),
+        reviewed_at TIMESTAMP,
+        review_status VARCHAR(20) DEFAULT 'PENDING', -- PENDING, CONFIRMED, FALSE_POSITIVE
+        review_notes TEXT
+      )
+    `);
+    console.log('✅ Blocked payments table created');
+
+    // Create indexes for better performance
+    try {
+      await db.query(`
+        CREATE INDEX IF NOT EXISTS idx_accounts_email ON accounts(email);
+        CREATE INDEX IF NOT EXISTS idx_accounts_iban ON accounts(iban);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_username ON accounts(username) WHERE username IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
+        CREATE INDEX IF NOT EXISTS idx_customers_cnic ON customers(cnic);
+        CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);
+        CREATE INDEX IF NOT EXISTS idx_webhooks_type ON webhooks(webhook_type);
+        CREATE INDEX IF NOT EXISTS idx_webhooks_status ON webhooks(status);
+        CREATE INDEX IF NOT EXISTS idx_webhooks_account_id ON webhooks(account_id);
+        CREATE INDEX IF NOT EXISTS idx_pending_payments_status ON pending_payments(status);
+        CREATE INDEX IF NOT EXISTS idx_pending_payments_account_id ON pending_payments(account_id);
+        CREATE INDEX IF NOT EXISTS idx_pending_payments_risk_score ON pending_payments(risk_score);
+        CREATE INDEX IF NOT EXISTS idx_pending_payments_created_at ON pending_payments(created_at);
+        CREATE INDEX IF NOT EXISTS idx_block_list_name ON block_list(LOWER(name));
+        CREATE INDEX IF NOT EXISTS idx_block_list_active ON block_list(is_active);
+        CREATE INDEX IF NOT EXISTS idx_blocked_payments_sender ON blocked_payments(LOWER(sender_name));
+        CREATE INDEX IF NOT EXISTS idx_blocked_payments_status ON blocked_payments(review_status);
+      `);
+      
+      // Create wallet-related indexes separately (these columns might not exist in old schemas)
+      await db.query(`
+        CREATE INDEX IF NOT EXISTS idx_accounts_wallet_address ON accounts(wallet_address);
+        CREATE INDEX IF NOT EXISTS idx_accounts_wallet_id ON accounts(wallet_id);
+        CREATE INDEX IF NOT EXISTS idx_accounts_asset_id ON accounts(asset_id);
+      `);
+    } catch (error: any) {
+      // Log the error but don't fail - some indexes might not be possible if columns don't exist
+      console.log('⚠️ Some indexes could not be created (likely missing columns):', error.message);
+    }
+    
     console.log('✅ Database indexes created');
 
     console.log('✅ All database tables created successfully');
@@ -189,4 +337,72 @@ export function generateIBAN(): string {
   const checkDigits = (BigInt(98) - remainder).toString().padStart(2, '0');
   
   return `${countryCode}${checkDigits}${bankCode}${branchCode}${accountNumber}`;
+}
+
+// Block list checking utilities
+export async function checkBlockList(senderName: string): Promise<{
+  isBlocked: boolean;
+  matchedEntity?: any;
+  similarityScore?: number;
+  blockReason?: string;
+}> {
+  if (!senderName || typeof senderName !== 'string') {
+    return { isBlocked: false };
+  }
+
+  const db = getDatabase();
+  
+  try {
+    // Check for exact matches first (case insensitive)
+    const exactMatch = await db.query(
+      `SELECT * FROM block_list 
+       WHERE (LOWER(name) = LOWER($1) OR LOWER(alias) = LOWER($1))
+       AND is_active = TRUE`,
+      [senderName.trim()]
+    );
+
+    if (exactMatch.rows.length > 0) {
+      const entity = exactMatch.rows[0];
+      return {
+        isBlocked: true,
+        matchedEntity: entity,
+        similarityScore: 1.0,
+        blockReason: `Exact match with blocked entity: ${entity.name} (${entity.reason})`
+      };
+    }
+
+    // Check for partial matches using ILIKE (case insensitive pattern matching)
+    const partialMatch = await db.query(
+      `SELECT *, 
+         CASE 
+           WHEN LOWER(name) ILIKE LOWER($1) THEN 0.9
+           WHEN LOWER($1) ILIKE '%' || LOWER(name) || '%' THEN 0.8
+           WHEN LOWER(name) ILIKE '%' || LOWER($1) || '%' THEN 0.7
+           ELSE 0.0
+         END as similarity_score
+       FROM block_list 
+       WHERE (LOWER(name) ILIKE '%' || LOWER($1) || '%' OR LOWER($1) ILIKE '%' || LOWER(name) || '%')
+       AND is_active = TRUE
+       ORDER BY similarity_score DESC
+       LIMIT 1`,
+      [senderName.trim()]
+    );
+
+    if (partialMatch.rows.length > 0 && partialMatch.rows[0].similarity_score >= 0.7) {
+      const entity = partialMatch.rows[0];
+      return {
+        isBlocked: true,
+        matchedEntity: entity,
+        similarityScore: parseFloat(entity.similarity_score),
+        blockReason: `Partial match with blocked entity: ${entity.name} (${entity.reason})`
+      };
+    }
+
+    return { isBlocked: false };
+
+  } catch (error) {
+    console.error('Error checking block list:', error);
+    // In case of error, err on the side of caution but don't block
+    return { isBlocked: false };
+  }
 }

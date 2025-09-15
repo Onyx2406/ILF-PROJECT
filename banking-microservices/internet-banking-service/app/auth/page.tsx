@@ -49,18 +49,22 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-blue-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
-        <div className="bg-white rounded-lg shadow-lg p-8">
+        <div className="bg-white rounded-xl shadow-xl p-8 border-t-4 border-orange-500">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
+            <div className="mx-auto mb-4">
+                            <img 
+                src="/A.png" 
+                alt="Allied Bank Limited Logo" 
+                className="w-12 h-10 object-contain mb-4"
+              />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">ABL Internet Banking</h1>
-            <p className="text-gray-600">Sign in to your account</p>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-blue-700 bg-clip-text text-transparent mb-2">
+              ABL Internet Banking
+            </h1>
+            <p className="text-gray-600">Secure access to your digital banking</p>
           </div>
 
           {/* Error Message */}
@@ -82,7 +86,7 @@ export default function LoginPage() {
                 required
                 value={formData.username}
                 onChange={handleChange}
-                className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
                 placeholder="Enter your username"
               />
             </div>
@@ -97,7 +101,7 @@ export default function LoginPage() {
                 required
                 value={formData.password}
                 onChange={handleChange}
-                className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
                 placeholder="Enter your password"
               />
             </div>
@@ -105,7 +109,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+              className="w-full bg-gradient-to-r from-orange-500 to-blue-600 hover:from-orange-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
             >
               {isLoading ? (
                 <>
@@ -117,31 +121,48 @@ export default function LoginPage() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
                   </svg>
-                  <span>Sign In</span>
+                  <span>🔐 Secure Sign In</span>
                 </>
               )}
             </button>
           </form>
 
-          {/* Default Password Info */}
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
-            <h4 className="text-sm font-medium text-blue-900 mb-2">Login Information</h4>
-            <div className="text-sm text-blue-700 space-y-1">
-              <p><strong>Default Password:</strong> Abcd@1234</p>
-              <p><strong>Username:</strong> Generated from account creation (email + IBAN)</p>
-            </div>
-            <div className="mt-2 text-xs text-blue-600">
-              Check your account details in Core Banking for username.
-            </div>
-          </div>
-
+          
           {/* Quick Login Examples */}
-          <div className="mt-4 p-3 bg-gray-50 rounded-md">
-            <p className="text-xs text-gray-600 text-center">
+          <div className="mt-6 p-4 bg-gradient-to-r from-orange-50 to-blue-50 rounded-lg border">
+            <div className="text-center mb-3">
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">🛡️ Security Features</h4>
+              <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                <div className="flex items-center">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                  256-bit SSL
+                </div>
+                <div className="flex items-center">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
+                  2FA Ready
+                </div>
+                <div className="flex items-center">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full mr-2"></div>
+                  Real-time Monitoring
+                </div>
+                <div className="flex items-center">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full mr-2"></div>
+                  Fraud Protection
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-gray-600 text-center border-t pt-3">
               Username format: [email_prefix]_[iban_last4]_[random2digits]
             </p>
           </div>
-        </div>
+
+          {/* Footer */}
+          <div className="mt-6 text-center">
+            <p className="text-xs text-gray-500">
+              © 2025 Allied Bank Limited. Your trusted banking partner.
+            </p>
+          </div>
+        </div>  
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import express from 'express';
 import { RequestController } from '../controllers/requestController';
 import { RafikiController } from '../controllers/rafikiController';
+import { WebhookController } from '../controllers/webhookController';
 
 const router = express.Router();
 
@@ -18,6 +19,10 @@ router.get('/services/status', RequestController.getServiceStatus);
 
 // Rafiki service endpoints
 router.post('/rafiki/wallet', RafikiController.createWallet);
+
+// Webhook endpoints
+router.post('/webhooks/rafiki', WebhookController.receiveRafikiWebhook);
+router.get('/webhooks/stats', WebhookController.getWebhookStats);
 
 // Request forwarding
 router.all('/forward/:destination', RequestController.forwardRequest);
