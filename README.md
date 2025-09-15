@@ -39,11 +39,17 @@ pnpm i
 ```
 
 ### 5. Build all packages
-```bash
+```bashjke
 pnpm -r build
 ```
+### 6. (optional) Create Docker network and make sure  port 5432 is available
+```bash
+sudo lsof -i :5432 (to see if port is occupied or not)
+sudo kill -9 <(process id)>
+docker network create rafiki (only if you're prompted by termminal)
+```
 
-### 6. Run all packages
+### 7. Run all packages
 ```bash
 pnpm localenv:compose:psql up
 ```
