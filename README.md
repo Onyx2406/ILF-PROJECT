@@ -1,6 +1,6 @@
-# ILF-POC
+# ILF-PROJECT
 
-This repository contains a Proof of Concept (POC) implementation for ILF, built with Node.js, pnpm, and Docker. It includes microservices that can be containerized and run locally using Docker Compose.  
+This repository contains a POC implementation for ILF, built with Node.js, pnpm, and Docker. It includes microservices that can be containerized and run locally using Docker Compose.  
 
 ---
 
@@ -18,8 +18,8 @@ Before you begin, ensure you have the following installed:
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/sohaib1083/ILF-POC.git
-cd ILF-POC
+git clone https://github.com/sohaib1083/ILF-PROJECT.git
+cd ILF-PROJECT
 ```
 
 ### 2. Install Node.js
