@@ -1,6 +1,6 @@
 # ILF-PROJECT
 
-This repository contains a POC implementation for ILF, built with Node.js, pnpm, and Docker. It includes microservices that can be containerized and run locally using Docker Compose.  
+This repository contains a project implementation for ILF, built with Node.js, pnpm, and Docker. It includes microservices that can be containerized and run locally using Docker Compose.  
 
 ---
 
