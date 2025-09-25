@@ -1,0 +1,150 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database for Core Banking Service
+  abl-postgres:
+    image: postgres:15
+    container_name: abl-postgres
+    environment:
+      POSTGRES_DB: abl_cbs
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - abl_postgres_data:/var/lib/postgresql/data
+      - ./core-banking-service/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - banking-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d abl_cbs"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Core Banking Service (ABL Service) - Only talks to database
+  core-banking:
+    build:
+      context: ./core-banking-service
+      dockerfile: Dockerfile.frontend
+    container_name: core-banking
+    ports:
+      - "3200:3200"
+    environment:
+      - PGHOST=abl-postgres
+      - PGPORT=5432
+      - PGDATABASE=abl_cbs
+      - PGUSER=postgres
+      - PGPASSWORD=postgres
+      - NODE_ENV=development
+      - PORT=3200
+      # Rafiki Configuration
+      - HLB_GRAPHQL_ENDPOINT=http://localhost:4001/graphql
+      - HLB_SIGNATURE_SECRET=iyIgCprjb9uL8wFckR+pLEkJWMB7FJhgkvqhTQR/964=
+      - HLB_SIGNATURE_VERSION=1
+      - HLB_TENANT_ID=cf5fd7d3-1eb1-4041-8e43-ba45747e9e5d
+    volumes:
+      - ./core-banking-service/app:/app/app
+      - ./core-banking-service/components:/app/components
+      - ./core-banking-service/lib:/app/lib
+      - ./core-banking-service/public:/app/public
+    depends_on:
+      abl-postgres:
+        condition: service_healthy
+    networks:
+      - banking-network
+      - rafiki
+    restart: unless-stopped
+
+  # Orchestration Service (OC) - Request Forwarder and Queue Manager
+  oc-service:
+    build:
+      context: ./oc-service
+      dockerfile: Dockerfile
+    container_name: oc-service
+    ports:
+      - "3300:3300"
+    environment:
+      - NODE_ENV=development
+      - PORT=3300
+      - CORE_BANKING_URL=http://core-banking:3200/api
+      - INTERNET_BANKING_URL=http://internet-banking:3100/api
+      - RAFIKI_URL=http://localhost:4001
+    volumes:
+      - ./oc-service/src:/app/src
+    depends_on:
+      - core-banking
+    networks:
+      - banking-network
+      - rafiki
+    restart: unless-stopped
+
+  # Internet Banking Service - Customer-facing portal
+  internet-banking:
+    build:
+      context: ./internet-banking-service
+      dockerfile: Dockerfile.dev
+    container_name: internet-banking
+    ports:
+      - "3100:3100"
+    environment:
+      - NODE_ENV=development
+      - PORT=3100
+      - OC_SERVICE_URL=http://oc-service:3300
+      - NEXT_PUBLIC_OC_SERVICE_URL=http://localhost:3300
+    volumes:
+      - ./internet-banking-service/app:/app/app
+      - ./internet-banking-service/components:/app/components
+      - ./internet-banking-service/lib:/app/lib
+      - ./internet-banking-service/public:/app/public
+      - ./internet-banking-service/package.json:/app/package.json
+      - ./internet-banking-service/next.config.js:/app/next.config.js
+      - ./internet-banking-service/tailwind.config.js:/app/tailwind.config.js
+      - ./internet-banking-service/postcss.config.js:/app/postcss.config.js
+      - ./internet-banking-service/tsconfig.json:/app/tsconfig.json
+    depends_on:
+      - oc-service
+    networks:
+      - banking-network
+      - rafiki
+    restart: unless-stopped
+
+  # Demo Sender Service - For testing Rafiki payments
+  demo-sender:
+    build:
+      context: ./demo-sender
+      dockerfile: Dockerfile.dev
+    container_name: demo-sender
+    ports:
+      - "3400:3400"
+    environment:
+      - NODE_ENV=development
+      - PORT=3400
+      - NEXT_PUBLIC_RAFIKI_GRAPHQL_URL=http://localhost:3001/graphql
+      - RAFIKI_GRAPHQL_URL=http://cloud-nine-backend:3001/graphql
+    volumes:
+      - ./demo-sender/app:/app/app
+      - ./demo-sender/lib:/app/lib
+      - ./demo-sender/package.json:/app/package.json
+      - ./demo-sender/next.config.js:/app/next.config.js
+      - ./demo-sender/tailwind.config.js:/app/tailwind.config.js
+      - ./demo-sender/postcss.config.js:/app/postcss.config.js
+      - ./demo-sender/tsconfig.json:/app/tsconfig.json
+    networks:
+      - banking-network
+      - rafiki
+    restart: unless-stopped
+
+volumes:
+  abl_postgres_data:
+    driver: local
+
+networks:
+  banking-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+  rafiki:
+    external: true

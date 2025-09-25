@@ -1,0 +1,9 @@
+{
+  "watch": ["app/**/*", "lib/**/*", "components/**/*"],
+  "ext": "js,json,ts,tsx",
+  "ignore": ["node_modules/**/*", ".next/**/*"],
+  "exec": "PGPASSWORD=postgres npm run dev",
+  "env": {
+    "NODE_ENV": "development"
+  }
+}
